@@ -74,7 +74,7 @@ INCLUDE FILES: vmi5588.h
 #define RM_SIZE_ARRY 16 /* Plus size of array */
 
 /* Hardcoded board identification (This is set by jumpers) */
-#define RM_BOARD_ID     0x42
+#define RM_BOARD_ID     0x4b
 
 /* intRxStatus bits */
 #define RM_IRS_INT1     0x01
@@ -192,41 +192,37 @@ long vmi5588_init
 )
 {
     int             i;
-    int             error = 0;
     long            status;
-    short            test;
+    short           test;
     const char      vmi5588[] = "vmi5588";
 
     /* register the 5588 card in the A24 address space */
-    status = devRegisterAddress("vmi5588", atVMEA24,  RM_VME_BASE,
+    status = devRegisterAddress(vmi5588, atVMEA24,  RM_VME_BASE,
                                 RM_VME_SIZE, (void *)&prm);
     if (status != OK) {
        errlogPrintf("vmi5588: Failed to register A24 Base Address\n"); 
        return status;
     }
-    errlogPrintf("vmi5588: Registered A24 Base Address at %p\n", prm); 
 
     /* make sure something is out there */
     if (devReadProbe(sizeof(short), prm, &test) != OK) {
        devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
        prm = NULL;
-       error = S_dev_noDevice;
-       errlogPrintf("vmi5588: device not present, test=0x%04x\n", test); 
-    };
+       errlogPrintf("vmi5588: device not present\n"); 
+       return S_dev_noDevice;
+    }
     
-    if(!error)
-    {
-      /* is this the right card? */
-      if (prm->boardId != RM_BOARD_ID) {
-         devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
-         prm = NULL;
-         errlogPrintf("vmi5588: Wrong device, expected 0x%02x, found 0x%02x\n",
-                       RM_BOARD_ID, prm->boardId); 
-         return S_dev_wrongDevice;
-      };
+    /* is this the right card? */
+    if (prm->boardId != RM_BOARD_ID) {
+       errlogPrintf("vmi5588: wrong device ID, expected $%02x, found $%02x\n",
+                     RM_BOARD_ID, prm->boardId); 
+       devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
+       prm = NULL;
+       return S_dev_wrongDevice;
+    }
 
 #ifdef RM_DEBUG
-      printf("%s: Found RM card at addr %p\n", __FILE__, prm);
+      printf("%s: RM card at addr %p, Board ID=$%02x, Node ID=$%02x\n", __FILE__, prm, prm->boardId, prm->nodeId);
 #endif
 
       /* enable VMEbus Level 6 interrupts onto the card */
@@ -248,7 +244,7 @@ long vmi5588_init
 
       /* Finally we turn off the FAIL LED */
       prm->boardCsr &= ~RM_CSR_FAIL;
-    }
+    
     return OK;
 }
 
@@ -270,23 +266,19 @@ long vmi5588_init
 * .CE
 */
 
-long vmi5588_report
-(
-    void
-)
+long vmi5588_report (void)
 {
-    if (prm == NULL)
-    return S_dev_NoInit;
-
-    printf("vmi5588: RM node 0x%x, status 0x%lx, max %d retries\n",
-           prm->nodeId, rmStatus(0), rmMaxAttempts);
-
-#ifdef RM_DEBUG
-    printf("test address = 0x%x, mem starts at 0x%x\n", prm->test, *prm->mem);
-    {
     unsigned char   irs, csr, icr;
     int             i;
 
+    if (prm == NULL)
+    return S_dev_NoInit;
+
+    printf("vmi5588: RM node 0x%02x, status 0x%lx, max %d retries\n",
+           prm->nodeId, rmStatus(0), rmMaxAttempts);
+
+    printf("test address = 0x%x, mem starts at 0x%x\n", prm->test, *prm->mem);
+    
     /* read status */
     irs = prm->intRxStatus;
     csr = prm->boardCsr;
@@ -325,9 +317,7 @@ long vmi5588_report
            icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
            icr & RM_CR_INT_AUTOCLR ? "Auto clear, " : "",
            prm->vector[i].number);
-    };
-    };
-#endif
+    }
 
     return OK;
 }
