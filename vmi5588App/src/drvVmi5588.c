@@ -15,40 +15,42 @@
 /*
 modification history
 --------------------
-
+1994-10-10   anj   Original release 
 
 DESCRIPTION
 This driver contains support routines for the VMIC VMIVME5588 Reflective
-Memory card, for use both from EPICS and from a vxWorks/C subroutine.
+Memory card, for use both from EPICS and from a C subroutine.
 
 INCLUDE FILES: vmi5588.h
 */
 
-/* vxWorks #includes */
-#include    <vxWorks.h>
-#include    <vme.h>
-#include    <rebootLib.h>
-#include    <iv.h>
-#include    <intLib.h>
-#include    <symLib.h>
-#include    <vxLib.h>
-#include    <logLib.h>
-#include    <stdio.h>
-#include    <string.h>
 
 /* EPICS #includes */
+#include    <epicsStdioRedirect.h>
+#include    <epicsString.h>
+#include    <epicsExit.h>
+#include    <epicsExport.h>
+#include    <epicsPrint.h>
+#include    <cantProceed.h>
+#include    <errlog.h>
 #include    <dbDefs.h>
 #include    <dbScan.h>
 #include    <drvSup.h>
 #include    <devSup.h>
 #include    <devLib.h>
-#include    <module_types.h>
-#include    <task_params.h>
 #include    "vmi5588.h"
 
-/* Board addressing */
+
+
+/* These used to be defined by vxWorks */
+#define OK 0
+#define ERROR (-1)
+
+
+/* Board addressing */
 #define RM_DEBUG 1
 
+/* Base addr, interrupt vector and level are hard-coded.. Hmm.. */
 #define RM_VME_BASE 0xA00000    /* A24 Address space */
 #define RM_VME_SIZE 0x040000    /* 256 Kbytes long */
 
@@ -71,7 +73,7 @@ INCLUDE FILES: vmi5588.h
 #define RM_SIZE_STRG 48
 #define RM_SIZE_ARRY 16 /* Plus size of array */
 
-/* Board identification */
+/* Hardcoded board identification (This is set by jumpers) */
 #define RM_BOARD_ID     0x42
 
 /* intRxStatus bits */
@@ -105,12 +107,12 @@ INCLUDE FILES: vmi5588.h
 #define RM_CR_INT_AUTOCLR   0x08
 #define RM_CR_INT_ENABLE    0x10
 
-/* Exported forward references */
+/* Exported forward references */
 long            vmi5588_report();
 long            vmi5588_init();
 
 /* Local forward references */
-LOCAL void      vmi5588_reboot(int startType);
+LOCAL void      vmi5588_reboot(void *p);
 
 /* Driver support DRVET */
 struct {
@@ -122,40 +124,14 @@ struct {
     vmi5588_report,
     vmi5588_init
 };
-
-
-/* Symbol Type data */
-static struct {
-    char           *ptokString;
-    unsigned char   tokType;
-} rmToken[] = {
-    {
-    "page", RM_TYPE_PAGE
-    },
-    {
-    "analogue", RM_TYPE_ALOG
-    },
-    {
-    "long", RM_TYPE_LONG
-    },
-    {
-    "string", RM_TYPE_STRG
-    },
-    {
-    "array", RM_TYPE_ARRY
-    },
-    {
-    "user", RM_TYPE_USER
-    },
-    {
-    NULL, 0
-    }
-};
-
+epicsExportAddress(drvet, drvVmi5588);
 
 /* Driver variables */
-LOCAL VOIDFUNCPTR pisr[4];
-LOCAL SYMTAB_ID rmSymTbl;
+LOCAL void (*pisr[4])(int);
+
+
+
+/* LOCAL SYMTAB_ID rmSymTbl; */
 int rmMaxAttempts;
 
 struct {
@@ -196,7 +172,7 @@ struct {                    /* VMIVME5588    */
     unsigned char   mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
 } *prm;
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_init - DRVET Init function
 *
@@ -218,34 +194,39 @@ long vmi5588_init
     int             i;
     int             error = 0;
     long            status;
-    char            test;
+    short            test;
     const char      vmi5588[] = "vmi5588";
 
     /* register the 5588 card in the A24 address space */
-    status = devRegisterAddress(vmi5588, atVMEA24, (void *) RM_VME_BASE,
-                                RM_VME_SIZE, (void **) &prm);
-    if (status != OK)
-    return status;
+    status = devRegisterAddress("vmi5588", atVMEA24,  RM_VME_BASE,
+                                RM_VME_SIZE, (void *)&prm);
+    if (status != OK) {
+       errlogPrintf("vmi5588: Failed to register A24 Base Address\n"); 
+       return status;
+    }
+    errlogPrintf("vmi5588: Registered A24 Base Address at %p\n", prm); 
 
     /* make sure something is out there */
-    if (vxMemProbe(&prm->boardId, READ, sizeof(char), &test) != OK) {
-    (void) devUnregisterAddress(atVMEA24, (void *) RM_VME_BASE, vmi5588);
-    prm   = NULL;
-    error = S_dev_noDevice;
+    if (devReadProbe(sizeof(short), prm, &test) != OK) {
+       devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
+       prm = NULL;
+       error = S_dev_noDevice;
+       errlogPrintf("vmi5588: device not present, test=0x%04x\n", test); 
     };
     
     if(!error)
     {
       /* is this the right card? */
       if (prm->boardId != RM_BOARD_ID) {
-      (void) devUnregisterAddress(atVMEA24, (void *) RM_VME_BASE, vmi5588);
-      prm = NULL;
-      return S_dev_wrongDevice;
+         devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
+         prm = NULL;
+         errlogPrintf("vmi5588: Wrong device, expected 0x%02x, found 0x%02x\n",
+                       RM_BOARD_ID, prm->boardId); 
+         return S_dev_wrongDevice;
       };
 
 #ifdef RM_DEBUG
-      printf("%s: Found RM card at addr %x\n",
-         __FILE__, (unsigned int)prm);
+      printf("%s: Found RM card at addr %p\n", __FILE__, prm);
 #endif
 
       /* enable VMEbus Level 6 interrupts onto the card */
@@ -260,7 +241,8 @@ long vmi5588_init
       };
 
       /* turn any interrupts off if we do a reboot */
-      rebootHookAdd((FUNCPTR) vmi5588_reboot);
+      /* rebootHookAdd((FUNCPTR) vmi5588_reboot); */
+      epicsAtExit(vmi5588_reboot, NULL);
 
       rmMaxAttempts = 0;
 
@@ -270,7 +252,7 @@ long vmi5588_init
     return OK;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_report - DRVET Report function
 *
@@ -296,8 +278,8 @@ long vmi5588_report
     if (prm == NULL)
     return S_dev_NoInit;
 
-    printf("vmi5588: RM node 0x%x, status 0x%x, max %d retries\n",
-           prm->nodeId, (unsigned int)rmStatus, rmMaxAttempts);
+    printf("vmi5588: RM node 0x%x, status 0x%lx, max %d retries\n",
+           prm->nodeId, rmStatus(0), rmMaxAttempts);
 
 #ifdef RM_DEBUG
     printf("test address = 0x%x, mem starts at 0x%x\n", prm->test, *prm->mem);
@@ -350,7 +332,7 @@ long vmi5588_report
     return OK;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_reboot - rebootHook routine
 *
@@ -364,10 +346,7 @@ long vmi5588_report
 * NOMANUAL
 */
 
-LOCAL void vmi5588_reboot
-(
-    int startType       /* vxWorks reboot type */
-)
+LOCAL void vmi5588_reboot (void *p)
 {
     int             i;
 
@@ -376,7 +355,7 @@ LOCAL void vmi5588_reboot
 }
 
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_intr - interrupt handler
 *
@@ -388,14 +367,13 @@ LOCAL void vmi5588_reboot
 * NOMANUAL
 */
 
-void vmi5588_intr
-(
-    int irqNumber       /* RM interrupt channel number */
-)
+void vmi5588_intr(void *p)
 {
+    int irqNumber = *(int *)p;
+  /* RM interrupt channel number */
     if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
-    logMsg("%s: Bad RM Interrupt, parameter = 0x%x", 
-        (int) __FILE__, irqNumber, 0, 0, 0, 0);
+    errlogPrintf("%s: Bad RM Interrupt, parameter = 0x%x", 
+         __FILE__, irqNumber);
     return;
     };
 
@@ -411,11 +389,11 @@ void vmi5588_intr
                                         RM_CR_INT_AUTOCLR;
     }
     else
-    logMsg("%s: RM Interrupt #%d while disconnected", 
-        (int) __FILE__, irqNumber, 0, 0, 0, 0);
+    errlogPrintf("%s: RM Interrupt #%d while disconnected", 
+        __FILE__, irqNumber);
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * rmIntConnect - Connect a C routine up to an RM Interrupt
 *
@@ -454,30 +432,30 @@ void vmi5588_intr
 long rmIntConnect
 (
     int irqNumber,      /* RM interrupt channel */
-    VOIDFUNCPTR proutine    /* routine to call on int */
+    void (*proutine)(int)    /* routine to call on int */
 )
 {
     long status;
 
     if (prm == NULL)
-    return S_dev_NoInit;
+       return S_dev_NoInit;
     if (irqNumber < 0 || irqNumber > 3)
-    return S_dev_vxWorksVecInstlFail;
+       return S_dev_vecInstlFail;
     if (pisr[irqNumber] != NULL)
-    return S_dev_vectorInUse;
+       return S_dev_vectorInUse;
 
     /* plug in our wrapper routine */
     status = devConnectInterrupt(intVME, RM_INT_VECTOR + irqNumber,
-                                 vmi5588_intr, (void *) irqNumber);
+                                 vmi5588_intr, (void *)&irqNumber);
     if (status != OK)
-    return status;
+       return status;
 
     /* save the routine pointer */
     pisr[irqNumber] = proutine;
 
     /* clear out card interrupt FIFOs */
     if (irqNumber > 0)
-    prm->interrupt[irqNumber].senderId = 0;
+       prm->interrupt[irqNumber].senderId = 0;
 
     /* finally enable the hardware */
     prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | 
@@ -486,7 +464,7 @@ long rmIntConnect
     return OK;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * rmIntDisconnect - Disconnect an RM Interrupt routine
 *
@@ -529,7 +507,7 @@ long rmIntDisconnect
                                   vmi5588_intr);
 }
 
-/*****************************************************************************
+/*****************************************************************************
 * rmIntSend - send an RM interrupt
 *
 * This causes an interrupt to be sent out on the RM bus, using the given
@@ -573,7 +551,7 @@ long rmIntSend
     return OK;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * rmNodeId - return my RM Node number
 *
@@ -605,7 +583,7 @@ long rmNodeId
 }
 
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * rmStatus - return current RM status information
 *
@@ -657,12 +635,12 @@ long rmNodeId
 *
 */
 
-long rmStatus
+unsigned long rmStatus
 (
     long reset      /* Status bits to reset */
 )
 {
-    long            stat;
+    unsigned long        stat;
     static unsigned char testCounter;
 
     if (prm == NULL)
@@ -692,424 +670,9 @@ long rmStatus
     return stat;
 }
 
-/*****************************************************************************
-*
-* rmLoadSymbols - load RM symbol file from stdin
-*
-* This routine expects to have a file connected to its stdin, and reads
-* a reflective memory allocation map from that file. For EPICS to start up
-* properly, the symbols should be loaded before iocInit is called so that
-* the RM records can find their hardware addresses at initialisation, thus
-* it is not necessary for vmi5588_init to have been called before loading
-* the symbol file.
-*
-* The file format comprises a series of lines, each starting with a keyword,
-* possible followed by a name, and for some keywords a number is also used.
-* Comment lines should have a # symbol in the first column, and blank lines
-* may also be included. Each keyword describes and optionally names a record
-* to appear in the reflected memory map, or declares the start of a new RM
-* page. The syntax is as follows:
-*
-* .CS
-*          page [name [nnn]]
-*          analogue [name]
-*          long [name]
-*          string [name]
-*          array name nnn
-*          user name nnn
-* .CE
-*
-* If no name is given for a particular record, a gap will be left in the
-* memory map of the correct size but the record cannot be accessed from this
-* IOC. This permits different files to be used for different IOCs, naming 
-* only those records to be used but leaving space for the other records. The
-* page structure can be used as an alternative to this, and it is possible
-* to load several different symbol files one after the other, having a single
-* page declaration in each say.
-*
-* The optional number in a page declaration makes it possible to declare RM
-* pages in any order. Note that no checking is performed to see if a page has 
-* already been declared, so it is possible to have duplicate and conflicting
-* declarations. The page name is created as a symbol, but cannot be used to
-* look up an address.
-*
-* An array record can contain data of any type (set by FTVL field) and 
-* number of elements (set by NELM field), so a name storage size (in bytes)
-* must be given in the symbol file.  To calculate the amount of storage
-* needed, multiply the number of elements in the array by the size of a
-* single element according to the following table.  An overhead of 16 bytes
-* is automatically added to the figure given and the length rounded up to a
-* 4-byte boundary when actually allocating the storage.
-*
-* .CS
-*          Field Type    Size
-*          ----------    ----
-*          STRING         40
-*          CHAR/UCHAR      1
-*          SHORT/USHORT    2
-*          LONG/ULONG      4
-*          FLOAT           4
-*          DOUBLE          8
-*          ENUM            2
-* .CE
-*
-* The user keyword allows areas of RM to be defined for fast access via the C
-* subroutine interface. For this keyword, both the name and size parameter
-* (which is the number of bytes of storage desired) are required.
-*
-* RETURNS:
-* OK, or S_dev_???
-*
-* EXAMPLE:
-* .CS
-*   -> rmLoadSymbols < synchro/mysym.rms
-*   value = 0 = 0x0
-*   -> rmLoadSymbols
-*   page seven 7
-*   analogue Command
-*   # array of 5 * DOUBLE = (5*8)+16 bytes
-*   array Arguments 56
-*   page test 200
-*   user shared 64
-*   ^Dvalue = 0 = 0x0
-*
-* SEE ALSO: rmPrintSymbols(), rmAddr()
-*/
-
-long rmLoadSymbols
-(
-    void
-)
-{
-    int             pageNumber = 0,
-                    pageOffset = 0;
-    int             tokenCount, i;
-    long            status;
-    char            inputLine[RM_INPUTLINESIZE];
-    char            inputType[RM_INPUTTYPESIZE];
-    char            inputName[RM_INPUTNAMESIZE];
-    short           inputNumber;
-
-    /* create symbol table if not defined */
-    if (rmSymTbl == NULL) {
-    rmSymTbl = symTblCreate(RM_SYM_HASHSIZE, FALSE, memSysPartId);
-    if (rmSymTbl == NULL) {
-        errMessage(0, "Can't create RM symbol table\n");
-        return S_dev_noMemory;
-    };
-    };
-
-    status = OK;
-
-    /* scan file until EOF */
-    while (gets(inputLine)) {
-
-    /* ignore if it's a blank line or comment */
-    if (strlen(inputLine) == 0)
-        continue;
-    if (inputLine[0] == '#')
-        continue;
-
-    /* split line into <type> [<name> [<number>]] */
-    tokenCount = sscanf(inputLine, "%s%s%hi",
-                inputType, inputName, &inputNumber);
-
-    if (tokenCount < 1)
-        continue;
-
-    /* look up this type */
-    for (i = 0; rmToken[i].ptokString != NULL; i++)
-        if (strcmp(inputType, rmToken[i].ptokString) == 0)
-        break;
-
-    switch (rmToken[i].tokType) {
-        case RM_TYPE_PAGE:  /* page [<name> [<number>]] */
-
-        /* start a new rm page */
-        pageNumber++;
-        pageOffset = 0;
-        if (tokenCount > 2)
-            if (inputNumber < 0 || inputNumber > RM_NUM_PAGE) {
-            status = S_dev_badSignalNumber;
-            errPrintf(status, __FILE__, __LINE__,
-                       "Bad RM page number: %s (%d)\n",
-                       inputName, inputNumber);
-            }
-            else
-            pageNumber = inputNumber;
-        if (tokenCount > 1 && 
-            symAdd(rmSymTbl, inputName,
-               (char *)(pageNumber * RM_PAGE_SIZE + pageOffset),
-               RM_TYPE_PAGE, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                   "Duplicate RM page symbol: %s\n",
-                   inputName);
-        };
-        break;
-
-        case RM_TYPE_ALOG:  /* analogue [<name>] */
-        if (tokenCount > 1 && 
-            symAdd(rmSymTbl, inputName,
-               (char *)(pageNumber * RM_PAGE_SIZE + pageOffset),
-               RM_TYPE_ALOG, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                   "Duplicate RM analogue symbol: %s\n",
-                   inputName);
-        };
-        pageOffset += RM_SIZE_ALOG;
-        break;
-
-        case RM_TYPE_LONG:  /* long [<name>] */
-        if (tokenCount > 1 && 
-            symAdd(rmSymTbl, inputName,
-               (char *) (pageNumber * RM_PAGE_SIZE + pageOffset),
-               RM_TYPE_LONG, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                   "Duplicate RM long symbol: %s\n",
-                   inputName);
-        };
-        pageOffset += RM_SIZE_LONG;
-        break;
-
-        case RM_TYPE_STRG:  /* string [<name>] */
-        if (tokenCount > 1 && 
-            symAdd(rmSymTbl, inputName,
-               (char *) (pageNumber * RM_PAGE_SIZE + pageOffset),
-               RM_TYPE_STRG, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                   "Duplicate RM string symbol: %s\n",
-                   inputName);
-        };
-        pageOffset += RM_SIZE_STRG;
-        break;
-
-        case RM_TYPE_USER:  /* user <name> <size> */
-        if (tokenCount < 3) {
-            status = S_dev_badRequest;
-            errMessage(status, "Missing parameter(s) to RM: user\n");
-        }
-        else {
-            if (symAdd(rmSymTbl, inputName,
-                   (char *)(pageNumber * RM_PAGE_SIZE + pageOffset),
-                   RM_TYPE_USER, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                       "Duplicate RM user symbol: %s\n",
-                       inputName);
-            };
-            pageOffset += (inputNumber & 3) ?
-            (inputNumber & ~3) + 4 : inputNumber;
-        };
-        break;
-
-        case RM_TYPE_ARRY:  /* array <name> <size> */
-        if (tokenCount < 3) {
-            status = S_dev_badRequest;
-            errMessage(status, "Missing parameter(s) to RM: array\n");
-        }
-        else {
-            if (symAdd(rmSymTbl, inputName,
-                   (char *)(pageNumber * RM_PAGE_SIZE + pageOffset),
-                   RM_TYPE_ARRY, 0)) {
-            status = S_dev_multDevice;
-            errPrintf(status, __FILE__, __LINE__,
-                       "Duplicate RM array symbol: %s\n",
-                       inputName);
-            };
-            inputNumber += RM_SIZE_ARRY;
-            pageOffset += (inputNumber & 3) ?
-            (inputNumber & ~3)+4 : inputNumber;
-        };
-        break;
-
-        default:        /* unrecognised */
-        status = S_dev_badRequest;
-        errPrintf(status, __FILE__, __LINE__,
-                   "Unrecognised RM type: %s", inputType);
-    }; /* switch */
-
-    if (pageOffset > RM_PAGE_SIZE) {
-        status = S_dev_noMemory;
-        errPrintf(status, __FILE__, __LINE__,
-               "RM Page overflow, page %d\n", pageNumber);
-        /* Try and recover */
-        pageNumber += (pageOffset / RM_PAGE_SIZE);
-        pageOffset = pageOffset % RM_PAGE_SIZE;
-    };
-    }; /* while */
-
-    clearerr(stdin);
-
-    return status;
-}
-
-/*****************************************************************************
-*
-* rmAddr - lookup address in RM symbol table
-*
-* This routine looks up the symbol with given name and type, and returns
-* the address of the VMIC5588 storage for that record.
-*
-* Symbol types are defined by a series of definitions in the vmi5588.h
-* header file.  All C subroutine interfaces should use RM_TYPE_USER
-* for their memory areas.
-*
-* .CS
-*          Type Name     Value
-*          ---------     -----
-*          RM_TYPE_ALOG   0x01
-*          RM_TYPE_LONG   0x02
-*          RM_TYPE_STRG   0x03
-*          RM_TYPE_ARRY   0x04
-*          RM_TYPE_USER   0x10
-*          RM_TYPE_PAGE   0x80
-* .CE
-*
-* RETURNS
-* RM address, or NULL if no such symbol or driver not initialised.
-*
-* EXAMPLE
-* .CS
-*   double *pshared;
-*
-*   pshared = rmAddr("Zernike", RM_TYPE_USER);
-*   if (pshared == NULL) {
-*       printf("Can't locate Zernike area in RM\\n");
-*       return(ERROR);
-*   }
-* .CE
-* 
-* SEE ALSO: rmLoadSymbols(), rmPrintSymbols()
-*/
-
-void *rmAddr
-(
-    char *pname,        /* symbol name to find */
-    int rmType          /* RM_TYPE_??? */
-)
-{
-    int             offset;
-    SYM_TYPE        retType;
-    STATUS          status;
-
-    if (prm == NULL)
-    return NULL;
-
-    status = symFindByNameAndType(rmSymTbl, pname, (char **) &offset, &retType,
-                  (SYM_TYPE) rmType, (SYM_TYPE) ~0);
-
-    return status ? NULL : &prm->mem[offset];
-}
 
 
-/*****************************************************************************
-*
-* rmLookup - lookup Address, Page and Offset of RM symbol
-*
-* This routine looks up the symbol with given name and type, and returns
-* the associated page and offset values.
-*
-* RETURNS:
-* OK, or S_dev_??? if no such symbol or driver not initialised.
-*
-* NOMANUAL
-*/
-
-long rmLookup
-(
-    char *pname,        /* symbol name to find */
-    int rmType,         /* RM_TYPE_??? */
-    struct rm_data **pprmData,  /* symbol address location */
-    short *prmPage,     /* symbol page location */
-    short *prmOffset        /* symbol offset location */
-)
-{
-    int             offset;
-    SYM_TYPE        retType;
-
-    if (prm == NULL)
-    return S_dev_NoInit;
-
-    if (symFindByNameAndType(rmSymTbl, pname, (char **) &offset, &retType,
-                 (SYM_TYPE) rmType, (SYM_TYPE) ~0))
-    return S_dev_badSignal;
-
-    *prmPage = offset / RM_PAGE_SIZE;
-    *prmOffset = offset % RM_PAGE_SIZE;
-    *pprmData = (struct rm_data *) &prm->mem[offset];
-    return OK;
-}
-
-/*****************************************************************************
-*
-* printSym - print symbol callback routine.
-*
-* Prints name string, address (offset if prm not set) and type. Callback
-* routine for use by symEach() from rmPrintSymbols().
-*
-* RETURNS:
-* TRUE, so symEach() continues
-*
-* NOMANUAL
-*/
-
-LOCAL BOOL printSym
-(
-    char *pname,
-    int offset,
-    SYM_TYPE type,
-    int arg,
-    UINT16 group
-)
-{
-    int i;
-
-    for (i=0; rmToken[i].ptokString != NULL; i++)
-    if ((type & 0xff) == rmToken[i].tokType)
-        break;
-
-    printf("%-15.15s  %8lX   %s\n", pname,
-           (prm == NULL) ? offset : (unsigned long) &prm->mem[offset], 
-           rmToken[i].ptokString);
-    return TRUE;
-}
-
-
-/*****************************************************************************
-*
-* rmPrintSymbols - display all RM symbols
-*
-* This command prints the name, address and type of all known RM symbols.
-* If the driver has not been initialised yet, the offset into the 5588
-* shared memory area is displayed instead of the address.
-*
-* EXAMPLE:
-* .CS
-*   -> rmPrintSymbols
-*   Name               Addr     Type
-*   A3               F0200730   analogue
-*   S7               F0201B90   string
-*   TrigL0           F0200F00   long
-*   S1               F0201730   string
-* .CE
-*
-* SEE ALSO: rmLoadSymbols(), rmAddr()
-*/
-
-void rmPrintSymbols
-(
-    void
-)
-{
-    printf("Name               Addr     Type\n");
-    symEach(rmSymTbl, (FUNCPTR) printSym, 0);
-}
-
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_pageISR - page trigger interrupt service routine
 *
@@ -1130,7 +693,7 @@ void vmi5588_pageISR
     short i;
 
 #ifdef RM_DEBUG
-    logMsg("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId, 0, 0, 0, 0, 0);
+    errlogPrintf("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId);
 #endif
 
     /* check for new data in page */
@@ -1139,14 +702,14 @@ void vmi5588_pageISR
         pageIo.p[i].lastPageFlag = prm->pageFlag[pageIo.p[i].page];
 
 #ifdef RM_DEBUG
-        logMsg("Triggering page <%d>\n", pageIo.p[i].page, 0, 0, 0, 0, 0);
+        errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);
 #endif
 
         scanIoRequest(pageIo.p[i].ioscanpvt);
     };
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_pageInit - initialise page data structure
 *
@@ -1187,7 +750,7 @@ long vmi5588_pageInit
     return status;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_pvtInit - initialise private data structure
 *
@@ -1209,14 +772,15 @@ void vmi5588_pvtInit
 {
     struct rmpvt   *prmpvt;
 
-    prmpvt = (struct rmpvt *) calloc(1, sizeof(struct rmpvt));
+    prmpvt = (struct rmpvt *)callocMustSucceed(1, sizeof(struct rmpvt),
+                  "vmi5588_pvtInit: Can't allocate memory");
     prmpvt->page = rmPage;
     prmpvt->offset = rmOffset;
     prmpvt->address = prmData;
 
 #ifdef RM_DEBUG
-    printf("page<%x> offset<%x> address<%x>\n", 
-           rmPage, rmOffset, *prmData);
+   epicsPrintf("page<%x> offset<%x> address<%p>\n", 
+           rmPage, rmOffset, prmData);
 #endif
 
     *ppdpvt = prmpvt;
@@ -1259,7 +823,7 @@ long vmi5588_getIoscanpvt
     return S_dev_internal;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_trigger - trigger a remote I/O interrupt
 *
@@ -1283,7 +847,7 @@ long vmi5588_trigger
 #ifdef RM_DEBUG
     printf("page <%hd>  pageFlag[page] <%hd>\n",
             rmPage, prm->pageFlag[rmPage]);
-    logMsg("sending interrupt to all RMs\n", 0, 0, 0, 0, 0, 0);
+    errlogPrintf("sending interrupt to all RMs\n");
 #endif
 
     return rmIntSend(1, -1);

@@ -18,18 +18,17 @@ modification history
 
 */
 
-#include    <vxWorks.h>
-#include    <types.h>
-#include    <stdioLib.h>
 #include    <string.h>
-
+#include    <epicsString.h>
+#include    <epicsExport.h>
+#include    <recGbl.h>
+#include    <errlog.h>
 #include    <alarm.h>
 #include    <dbDefs.h>
 #include    <dbScan.h>
 #include    <dbAccess.h>
-#include        <recSup.h>
+#include    <recSup.h>
 #include    <devSup.h>
-#include    <module_types.h>
 #include    <biRecord.h>
 #include    "vmi5588.h"
 
@@ -52,7 +51,10 @@ struct {
     init_record,
     NULL,
     read_bi};
-
+epicsExportAddress(dset, devBiVmi5588);
+
+
+
 static long init_record(struct biRecord *prec)
 {
     static struct {

@@ -2,4 +2,5 @@
 device( bi, INST_IO, devBiVmi5588,     "VMI5588 Synchro Bus" )
 
 # Driver Support
-driver(devBiVmi5588)
+#driver(devBiVmi5588)
+driver(drvVmi5588)

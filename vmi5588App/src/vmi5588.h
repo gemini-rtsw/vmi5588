@@ -95,24 +95,27 @@ struct rmpvt {
 
 
 /* Routines available to C applications */
-long   rmIntConnect(int irqNumber, VOIDFUNCPTR proutine);
+long   rmIntConnect(int irqNumber, void (*proutine)(int));
 long   rmIntDisconnect(int irqNumber);
 long   rmIntSend(int irqNumber, int nodeId);
 long   rmNodeId(void);
-long   rmStatus(long reset);
+unsigned long   rmStatus(long reset);
+
+
+#if 0
 long   rmLoadSymbols(void);
 void  *rmAddr(char *pname, int rmType);
 long   rmLookup(char *pname, int rmType,
                 struct rm_data **pprmData, 
                 short *prmPage, short *prmOffset);
 void   rmPrintSymbols(void);
-
+#endif
 
 /* Routines for use within device support only */
 long vmi5588_pageInit(short rmPage);
 void vmi5588_pvtInit(struct rmpvt **ppdpvt, short rmPage, short rmOffset,
                      struct rm_data *prmData);
-long vmi5588_getIoscanpvt(struct rmpvt *pdpvt, void **pscanpvt);
+long vmi5588_getIoscanpvt(struct rmpvt *pdpvt, IOSCANPVT *pscanpvt);
 long vmi5588_trigger(short rmPage);
 
 #endif /* INCvmi5588h */
