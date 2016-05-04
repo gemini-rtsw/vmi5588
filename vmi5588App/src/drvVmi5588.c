@@ -38,6 +38,7 @@ INCLUDE FILES: vmi5588.h
 #include    <drvSup.h>
 #include    <devSup.h>
 #include    <devLib.h>
+#include    <iocsh.h>
 #include    "vmi5588.h"
 
 
@@ -49,14 +50,6 @@ INCLUDE FILES: vmi5588.h
 
 /* Board addressing */
 #define RM_DEBUG 1
-
-/* Base addr, interrupt vector and level are hard-coded.. Hmm.. */
-#define RM_VME_BASE 0xA00000    /* A24 Address space */
-#define RM_VME_SIZE 0x040000    /* 256 Kbytes long */
-
-/* Interrupt addressing */
-#define RM_INT_VECTOR   0xb0    /* 4 vectors used, b0 to b3 */
-#define RM_INT_LEVEL    6   /* interrupts are urgent */
 
 /* Internal driver sizes */
 #define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
@@ -107,6 +100,20 @@ INCLUDE FILES: vmi5588.h
 #define RM_CR_INT_AUTOCLR   0x08
 #define RM_CR_INT_ENABLE    0x10
 
+
+/* default base addr, mem size, interrupt vector and level */
+#define RM_VME_BASE 0xA00000    /* A24 Address space */
+#define RM_VME_SIZE 0x040000    /* 256 Kbytes long */
+#define RM_INT_VECTOR   0xb0    /* 4 vectors used, b0 to b3 */
+#define RM_INT_LEVEL       6    /* interrupts are urgent */
+
+/* default values */
+static unsigned int vmi5588_baseAddr = RM_VME_BASE;
+static unsigned int vmi5588_memSize  = RM_VME_SIZE;
+static unsigned int vmi5588_intVec   = RM_INT_VECTOR;
+static unsigned int vmi5588_intLvl   = RM_INT_LEVEL;
+
+ 
 /* Exported forward references */
 long            vmi5588_report();
 long            vmi5588_init();
@@ -197,8 +204,8 @@ long vmi5588_init
     const char      vmi5588[] = "vmi5588";
 
     /* register the 5588 card in the A24 address space */
-    status = devRegisterAddress(vmi5588, atVMEA24,  RM_VME_BASE,
-                                RM_VME_SIZE, (void *)&prm);
+    status = devRegisterAddress(vmi5588, atVMEA24,  vmi5588_baseAddr,
+                                vmi5588_memSize, (void *)&prm);
     if (status != OK) {
        errlogPrintf("vmi5588: Failed to register A24 Base Address\n"); 
        return status;
@@ -206,7 +213,7 @@ long vmi5588_init
 
     /* make sure something is out there */
     if (devReadProbe(sizeof(short), prm, &test) != OK) {
-       devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
+       devUnregisterAddress(atVMEA24, vmi5588_baseAddr, vmi5588);
        prm = NULL;
        errlogPrintf("vmi5588: device not present\n"); 
        return S_dev_noDevice;
@@ -216,7 +223,7 @@ long vmi5588_init
     if (prm->boardId != RM_BOARD_ID) {
        errlogPrintf("vmi5588: wrong device ID, expected $%02x, found $%02x\n",
                      RM_BOARD_ID, prm->boardId); 
-       devUnregisterAddress(atVMEA24, RM_VME_BASE, vmi5588);
+       devUnregisterAddress(atVMEA24, vmi5588_baseAddr, vmi5588);
        prm = NULL;
        return S_dev_wrongDevice;
     }
@@ -226,14 +233,14 @@ long vmi5588_init
 #endif
 
       /* enable VMEbus Level 6 interrupts onto the card */
-      status = devEnableInterruptLevel(intVME, RM_INT_LEVEL);
+      status = devEnableInterruptLevel(intVME, vmi5588_intLvl);
       if (status != OK)
       return status;
 
       /* initialise the card interrupters */
       for (i = 0; i <= 3; i++) {
       pisr[i] = NULL;
-      prm->vector[i].number = RM_INT_VECTOR + i;
+      prm->vector[i].number = vmi5588_intVec + i;
       };
 
       /* turn any interrupts off if we do a reboot */
@@ -435,7 +442,7 @@ long rmIntConnect
        return S_dev_vectorInUse;
 
     /* plug in our wrapper routine */
-    status = devConnectInterrupt(intVME, RM_INT_VECTOR + irqNumber,
+    status = devConnectInterrupt(intVME, vmi5588_intVec + irqNumber,
                                  vmi5588_intr, (void *)&irqNumber);
     if (status != OK)
        return status;
@@ -493,7 +500,7 @@ long rmIntDisconnect
     pisr[irqNumber] = NULL;
 
     /* disconnect the software */
-    return devDisconnectInterrupt(intVME, RM_INT_VECTOR + irqNumber,
+    return devDisconnectInterrupt(intVME, vmi5588_intVec + irqNumber,
                                   vmi5588_intr);
 }
 
@@ -843,3 +850,37 @@ long vmi5588_trigger
     return rmIntSend(1, -1);
 }
 
+
+
+int drvVmi5588Config(unsigned baseAddr, unsigned memSize, unsigned intVec, unsigned intLvl)
+{
+   vmi5588_baseAddr = baseAddr;
+   vmi5588_memSize  = memSize;
+   vmi5588_intVec   = intVec;
+   vmi5588_intLvl   = intLvl;
+   return 0;
+}
+
+static const iocshArg drvVmi5588Arg0 = {"baseAddr", iocshArgInt};
+static const iocshArg drvVmi5588Arg1 = {"memSize", iocshArgInt};
+static const iocshArg drvVmi5588Arg2 = {"intVec", iocshArgInt};
+static const iocshArg drvVmi5588Arg3 = {"intLvl", iocshArgInt};
+static const iocshArg *drvVmi5588ConfigArgs[] = 
+         {&drvVmi5588Arg0,&drvVmi5588Arg1,&drvVmi5588Arg2,&drvVmi5588Arg3};
+static const iocshFuncDef drvVmi5588ConfigFuncDef = 
+         {"drvVmi5588Config", 4, drvVmi5588ConfigArgs};       
+static void drvVmi5588ConfigCallFunc(const iocshArgBuf *args)
+{
+   drvVmi5588Config(args[0].ival, args[1].ival,args[2].ival,args[3].ival);
+}
+
+static void drvVmi5588RegisterCommands(void)
+{
+  static int firstTime = 1;   
+  if(firstTime) {
+     iocshRegister(&drvVmi5588ConfigFuncDef, drvVmi5588ConfigCallFunc);
+
+     firstTime = 0;
+   }
+}
+epicsExportRegistrar(drvVmi5588RegisterCommands);
