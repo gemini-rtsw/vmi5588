@@ -47,13 +47,11 @@ INCLUDE FILES: vmi5588.h
 #define OK 0
 #define ERROR (-1)
 
-
-/* Board addressing */
 #define RM_DEBUG 1
 
 /* Internal driver sizes */
 #define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
-#define RM_NUM_PAGE  255    /* max number of pages */
+#define RM_NUM_PAGE  255    /* max number of pages (for 256 kB board) */
 
 #define RM_SYM_HASHSIZE    6    /* Hash size for symbol table (log2) */
 #define RM_INPUTLINESIZE 256    /* Input line buffer length */
@@ -66,8 +64,9 @@ INCLUDE FILES: vmi5588.h
 #define RM_SIZE_STRG 48
 #define RM_SIZE_ARRY 16 /* Plus size of array */
 
-/* Hardcoded board identification (This is set by jumpers) */
-#define RM_BOARD_ID     0x4b
+/* Board identification (hardcoded into the board's firmware)  */
+#define RM_BOARD_ID        0x42   /* ID of non-DMA VMI5588 */
+#define RM_DMA_BOARD_ID    0x4b   /* ID of VMI5588DMA      */
 
 /* intRxStatus bits */
 #define RM_IRS_INT1     0x01
@@ -144,9 +143,9 @@ int rmMaxAttempts;
 struct {
     long            number;
     struct {
-    short           page;
-    short           lastPageFlag;
-    IOSCANPVT       ioscanpvt;
+       short           page;
+       short           lastPageFlag;
+       IOSCANPVT       ioscanpvt;
     } p[RM_NUM_PAGE];
 } pageIo;
 
@@ -219,10 +218,10 @@ long vmi5588_init
        return S_dev_noDevice;
     }
     
-    /* is this the right card? */
-    if (prm->boardId != RM_BOARD_ID) {
-       errlogPrintf("vmi5588: wrong device ID, expected $%02x, found $%02x\n",
-                     RM_BOARD_ID, prm->boardId); 
+    /* is this the right kind of card? */
+    if ((prm->boardId != RM_BOARD_ID) && (prm->boardId != RM_DMA_BOARD_ID))    {
+       errlogPrintf("vmi5588: wrong device ID, expected $%02x or $%02x, found $%02x\n",
+                     RM_BOARD_ID, RM_DMA_BOARD_ID, prm->boardId); 
        devUnregisterAddress(atVMEA24, vmi5588_baseAddr, vmi5588);
        prm = NULL;
        return S_dev_wrongDevice;
@@ -273,7 +272,7 @@ long vmi5588_init
 * .CE
 */
 
-long vmi5588_report (void)
+long vmi5588_report (int level)
 {
     unsigned char   irs, csr, icr;
     int             i;
@@ -283,8 +282,8 @@ long vmi5588_report (void)
 
     printf("vmi5588: RM node 0x%02x, status 0x%lx, max %d retries\n",
            prm->nodeId, rmStatus(0), rmMaxAttempts);
-
-    printf("test address = 0x%x, mem starts at 0x%x\n", prm->test, *prm->mem);
+if(level >= 1) {
+    printf("test address = %p, mem starts at %p\n", &prm->test, prm->mem);
     
     /* read status */
     irs = prm->intRxStatus;
@@ -325,7 +324,7 @@ long vmi5588_report (void)
            icr & RM_CR_INT_AUTOCLR ? "Auto clear, " : "",
            prm->vector[i].number);
     }
-
+}
     return OK;
 }
 
@@ -851,7 +850,7 @@ long vmi5588_trigger
 }
 
 
-
+/* This must be called exactly once,  before iocinit() */
 int drvVmi5588Config(unsigned baseAddr, unsigned memSize, unsigned intVec, unsigned intLvl)
 {
    vmi5588_baseAddr = baseAddr;
