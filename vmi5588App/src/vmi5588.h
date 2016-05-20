@@ -38,6 +38,8 @@ Gemini EPICS
 
 */
 
+#include <dbScan.h>
+
 #ifndef _INCLUDED_VMI5588_H
 #define _INCLUDED_VMI5588_H
 
@@ -61,11 +63,12 @@ Gemini EPICS
 #define RM_TYPE_ARRY 0x04
 #define RM_TYPE_USER 0x10
 
+#define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
+#define RM_NUM_PAGE  255    /* max number of pages (for 256 kB board) */
 
 #define RM_MAX_ATTEMPTS 10
 
 extern int rmMaxAttempts;
-
 
 /* structures for use in device support */
 struct rm_data {
@@ -100,16 +103,8 @@ long   rmIntDisconnect(int irqNumber);
 long   rmIntSend(int irqNumber, int nodeId);
 long   rmNodeId(void);
 unsigned long   rmStatus(long reset);
+void * rmMemBase(void);
 
-
-#if 0
-long   rmLoadSymbols(void);
-void  *rmAddr(char *pname, int rmType);
-long   rmLookup(char *pname, int rmType,
-                struct rm_data **pprmData, 
-                short *prmPage, short *prmOffset);
-void   rmPrintSymbols(void);
-#endif
 
 /* Routines for use within device support only */
 long vmi5588_pageInit(short rmPage);

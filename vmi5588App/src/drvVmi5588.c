@@ -49,64 +49,49 @@ INCLUDE FILES: vmi5588.h
 
 #define RM_DEBUG 1
 
-/* Internal driver sizes */
-#define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
-#define RM_NUM_PAGE  255    /* max number of pages (for 256 kB board) */
-
-#define RM_SYM_HASHSIZE    6    /* Hash size for symbol table (log2) */
-#define RM_INPUTLINESIZE 256    /* Input line buffer length */
-#define RM_INPUTTYPESIZE  20    /* type keyword buffer length */
-#define RM_INPUTNAMESIZE 128    /* name buffer length */
-
-/* Storage to allocate for each shared rm_data structure */
-#define RM_SIZE_ALOG 16
-#define RM_SIZE_LONG 12
-#define RM_SIZE_STRG 48
-#define RM_SIZE_ARRY 16 /* Plus size of array */
-
 /* Board identification (hardcoded into the board's firmware)  */
 #define RM_BOARD_ID        0x42   /* ID of non-DMA VMI5588 */
 #define RM_DMA_BOARD_ID    0x4b   /* ID of VMI5588DMA      */
 
 /* intRxStatus bits */
-#define RM_IRS_INT1     0x01
-#define RM_IRS_INT2     0x02
-#define RM_IRS_INT3     0x04
-#define RM_IRS_RX_SIG       0x10
-#define RM_IRS_VIOLATION    0x20
-#define RM_IRS_LATCHED      0x40
-#define RM_IRS_RX_SYNC      0x80
+#define RM_IRS_INT1        0x01
+#define RM_IRS_INT2        0x02
+#define RM_IRS_INT3        0x04
+#define RM_IRS_RX_SIG      0x10
+#define RM_IRS_VIOLATION   0x20
+#define RM_IRS_LATCHED     0x40
+#define RM_IRS_RX_SYNC     0x80
 
 /* boardCsr bits */
-#define RM_CSR_FAST     0x01
-#define RM_CSR_MASK     0x02
-#define RM_CSR_OWN_DATA     0x04
-#define RM_CSR_BAD_DATA     0x08
-#define RM_CSR_TX_EMPTY     0x10
-#define RM_CSR_TX_HALF      0x20
-#define RM_CSR_RX_HALF      0x40
-#define RM_CSR_FAIL     0x80
+#define RM_CSR_FAST        0x01
+#define RM_CSR_MASK        0x02
+#define RM_CSR_OWN_DATA    0x04
+#define RM_CSR_BAD_DATA    0x08
+#define RM_CSR_TX_EMPTY    0x10
+#define RM_CSR_TX_HALF     0x20
+#define RM_CSR_RX_HALF     0x40
+#define RM_CSR_FAIL        0x80
 
 /* cmd_Node bits */
-#define RM_CMD_RESET        0x0000
-#define RM_CMD_INT1     0x0100
-#define RM_CMD_INT2     0x0200
-#define RM_CMD_INT3     0x0300
-#define RM_CMD_BROADCAST    0x4000
+#define RM_CMD_RESET     0x0000
+#define RM_CMD_INT1      0x0100
+#define RM_CMD_INT2      0x0200
+#define RM_CMD_INT3      0x0300
+#define RM_CMD_BROADCAST 0x4000
 
 /* interrupt[n].control bits */
-#define RM_CR_INT_LEVEL6    0x06
-#define RM_CR_INT_AUTOCLR   0x08
-#define RM_CR_INT_ENABLE    0x10
+#define RM_CR_INT_LEVEL6   0x06
+#define RM_CR_INT_AUTOCLR  0x08
+#define RM_CR_INT_ENABLE   0x10
 
 
 /* default base addr, mem size, interrupt vector and level */
-#define RM_VME_BASE 0xA00000    /* A24 Address space */
-#define RM_VME_SIZE 0x040000    /* 256 Kbytes long */
-#define RM_INT_VECTOR   0xb0    /* 4 vectors used, b0 to b3 */
-#define RM_INT_LEVEL       6    /* interrupts are urgent */
+#define RM_VME_BASE    0xA00000    /* A24 Address space */
+#define RM_VME_SIZE    0x040000    /* 256 Kbytes long */
+#define RM_INT_VECTOR      0xb0    /* 4 vectors used, b0 to b3 */
+#define RM_INT_LEVEL          6    /* interrupts are urgent */
 
-/* default values */
+/* set default values */
 static unsigned int vmi5588_baseAddr = RM_VME_BASE;
 static unsigned int vmi5588_memSize  = RM_VME_SIZE;
 static unsigned int vmi5588_intVec   = RM_INT_VECTOR;
@@ -132,16 +117,14 @@ struct {
 };
 epicsExportAddress(drvet, drvVmi5588);
 
-/* Driver variables */
+/* Array of interrupt service routine pointers */
 LOCAL void (*pisr[4])(int);
-
-
 
 /* LOCAL SYMTAB_ID rmSymTbl; */
 int rmMaxAttempts;
 
 struct {
-    long            number;
+    long               number;
     struct {
        short           page;
        short           lastPageFlag;
@@ -149,9 +132,8 @@ struct {
     } p[RM_NUM_PAGE];
 } pageIo;
 
-
 /* Memory layout of the reflective memory board */
-struct {                    /* VMIVME5588    */
+typedef struct {             /* VMIVME5588    */
     char                     pad1;      /* unused    */
     char                     boardId;       /* BID       */
     volatile unsigned char   intRxStatus;   /* IRS       */
@@ -176,7 +158,13 @@ struct {                    /* VMIVME5588    */
     short                    pad7[256-RM_NUM_PAGE]; /* align to xx00 */
     char                     pad8[0x100];   /* align to x400 */
     unsigned char   mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
-} *prm;
+} vmi5588_t;
+
+
+/* pointer to the VMI5588 memory structure */
+vmi5588_t volatile *prm;
+
+
 
 /*****************************************************************************
 *
@@ -232,7 +220,7 @@ long vmi5588_init
 #endif
 
       /* enable VMEbus Level 6 interrupts onto the card */
-      status = devEnableInterruptLevel(intVME, vmi5588_intLvl);
+      status = devEnableInterruptLevelVME(vmi5588_intLvl);
       if (status != OK)
       return status;
 
@@ -243,7 +231,6 @@ long vmi5588_init
       };
 
       /* turn any interrupts off if we do a reboot */
-      /* rebootHookAdd((FUNCPTR) vmi5588_reboot); */
       epicsAtExit(vmi5588_reboot, NULL);
 
       rmMaxAttempts = 0;
@@ -309,20 +296,22 @@ if(level >= 1) {
            "<50% Full" : ">50% FULL" : "Empty",
            csr & RM_CSR_RX_HALF ? "<50% Full" : ">50% FULL");
 
-    printf("    Int's:    %s%s%s\n",
+    printf("    Int's:    %s%s%s (irs=0x%02x)\n",
            irs & RM_IRS_INT1 ? "Irq 1 pending " : "",
            irs & RM_IRS_INT2 ? "Irq 2 pending " : "",
-           irs & RM_IRS_INT3 ? "Irq 3 pending " : "");
+           irs & RM_IRS_INT3 ? "Irq 3 pending " : "",
+           irs);
 
     for (i = 0; i <= 3; i++) {
         icr = prm->interrupt[i].control;
 
-        printf("       Int %d: %s, Level %d %s, %svector %x\n", i,
+        printf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02x)\n", i,
            pisr[i] != 0 ? "Allocated" : "Not in use",
            icr & 7,
            icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
            icr & RM_CR_INT_AUTOCLR ? "Auto clear, " : "",
-           prm->vector[i].number);
+           prm->vector[i].number,
+           icr);
     }
 }
     return OK;
@@ -332,7 +321,7 @@ if(level >= 1) {
 *
 * vmi5588_reboot - rebootHook routine
 *
-* This routine is connected to the vxWorks reboot Hook by vmi5588_init,
+* This routine is connected to the epicsAtExit() reboot Hook by vmi5588_init,
 * and is responsible for turning off RM interrupts. This is essential
 * because other nodes may continue to send interrupts after we have
 * restarted.
@@ -362,31 +351,51 @@ LOCAL void vmi5588_reboot (void *p)
 *
 * NOMANUAL
 */
+int intr0cnt = 0;
+epicsExportAddress (int, intr0cnt);
+int intr1cnt = 0;
+epicsExportAddress (int, intr1cnt);
+int intr2cnt = 0;
+epicsExportAddress (int, intr2cnt);
+int intr3cnt = 0;
+epicsExportAddress (int, intr3cnt);
+
+
+int volatile *intrCnts[] = {&intr0cnt, &intr1cnt, &intr2cnt, &intr3cnt};
 
 void vmi5588_intr(void *p)
 {
-    int irqNumber = *(int *)p;
-  /* RM interrupt channel number */
-    if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
-    errlogPrintf("%s: Bad RM Interrupt, parameter = 0x%x", 
-         __FILE__, irqNumber);
-    return;
-    };
+   int irqNumber = *(int *)p;                            /* RM interrupt channel number */
 
-    if (pisr[irqNumber] != NULL) {
-    if (irqNumber > 0)
-        (*pisr[irqNumber]) (prm->interrupt[irqNumber].senderId);
-    else
-        (*pisr[irqNumber]) (0);
+   if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
+      return;
+   }
 
-    /* finally re-initialise the interrupt hardware */
-    prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | 
-                                        RM_CR_INT_ENABLE | 
-                                        RM_CR_INT_AUTOCLR;
-    }
-    else
-    errlogPrintf("%s: RM Interrupt #%d while disconnected", 
+   (*intrCnts[irqNumber])++;
+
+   if (pisr[irqNumber] != NULL) {
+      if (irqNumber > 0) {
+          int senderId = prm->interrupt[irqNumber].senderId;             /* read sender ID register */
+          /* (*pisr[irqNumber]) (prm->interrupt[irqNumber].senderId); */
+          (*pisr[irqNumber]) (senderId);                                 /* call user interrupt handler */
+      }
+      else
+          (*pisr[irqNumber]) (0);
+
+
+      /* prm->interrupt[irqNumber].senderId = 0xff;  */                      /* clear interrupt fifo */
+
+      /* finally re-initialise the interrupt hardware */
+      /* prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | */
+      prm->interrupt[irqNumber].control = vmi5588_intLvl | 
+                                          RM_CR_INT_ENABLE | 
+                                          RM_CR_INT_AUTOCLR;
+   }
+#if 0
+   else
+       errlogPrintf("%s: RM Interrupt #%d while disconnected", 
         __FILE__, irqNumber);
+#endif
 }
 
 /*****************************************************************************
@@ -427,7 +436,7 @@ void vmi5588_intr(void *p)
 
 long rmIntConnect
 (
-    int irqNumber,      /* RM interrupt channel */
+    int irqNumber,           /* RM interrupt channel */
     void (*proutine)(int)    /* routine to call on int */
 )
 {
@@ -441,7 +450,7 @@ long rmIntConnect
        return S_dev_vectorInUse;
 
     /* plug in our wrapper routine */
-    status = devConnectInterrupt(intVME, vmi5588_intVec + irqNumber,
+    status = devConnectInterruptVME(vmi5588_intVec + irqNumber,
                                  vmi5588_intr, (void *)&irqNumber);
     if (status != OK)
        return status;
@@ -454,9 +463,12 @@ long rmIntConnect
        prm->interrupt[irqNumber].senderId = 0;
 
     /* finally enable the hardware */
-    prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | 
+    /* prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | */
+    prm->interrupt[irqNumber].control = vmi5588_intLvl | 
                                         RM_CR_INT_ENABLE | 
                                         RM_CR_INT_AUTOCLR;
+
+printf("RM: enabled INT #%d, routine=%p, CR=0x%02x\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
     return OK;
 }
 
@@ -499,7 +511,7 @@ long rmIntDisconnect
     pisr[irqNumber] = NULL;
 
     /* disconnect the software */
-    return devDisconnectInterrupt(intVME, vmi5588_intVec + irqNumber,
+    return devDisconnectInterruptVME(vmi5588_intVec + irqNumber,
                                   vmi5588_intr);
 }
 
@@ -655,12 +667,12 @@ unsigned long rmStatus
 
     /* Clear the R/W status bits */
     if (stat & reset & RM_RESYNC)
-    prm->intRxStatus &= ~RM_IRS_LATCHED;
+       prm->intRxStatus &= ~RM_IRS_LATCHED;
     if (stat & reset & RM_BADXFR)
-    prm->boardCsr &= ~RM_CSR_BAD_DATA;
+       prm->boardCsr &= ~RM_CSR_BAD_DATA;
     if (reset & RM_NORING) {
-    prm->boardCsr &= ~RM_CSR_OWN_DATA;
-    prm->test = (prm->nodeId << 8) + testCounter++;
+       prm->boardCsr &= ~RM_CSR_OWN_DATA;
+       prm->test = (prm->nodeId << 8) + testCounter++;
     };
 
     return stat;
@@ -694,15 +706,15 @@ void vmi5588_pageISR
 
     /* check for new data in page */
     for (i = 0; i < pageIo.number; i++)
-    if (prm->pageFlag[pageIo.p[i].page] != pageIo.p[i].lastPageFlag) {
-        pageIo.p[i].lastPageFlag = prm->pageFlag[pageIo.p[i].page];
+       if (prm->pageFlag[pageIo.p[i].page] != pageIo.p[i].lastPageFlag) {
+           pageIo.p[i].lastPageFlag = prm->pageFlag[pageIo.p[i].page];
 
 #ifdef RM_DEBUG
-        errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);
+           errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);
 #endif
 
-        scanIoRequest(pageIo.p[i].ioscanpvt);
-    };
+           scanIoRequest(pageIo.p[i].ioscanpvt);
+       }
 }
 
 /*****************************************************************************
@@ -727,12 +739,12 @@ long vmi5588_pageInit
     long status = OK;
 
     for (pageIndex = 0; pageIndex < pageIo.number; pageIndex++)
-    if (rmPage == pageIo.p[pageIndex].page)
-        return OK;
+       if (rmPage == pageIo.p[pageIndex].page)
+          return OK;
 
     if (pageIndex == 0)
-    if ((status = rmIntConnect(1, vmi5588_pageISR)) != OK)
-        errMessage(status, "Can't connect RM irq #1");
+       if ((status = rmIntConnect(1, vmi5588_pageISR)) != OK)
+           errMessage(status, "Can't connect RM irq #1");
 
     pageIo.p[pageIndex].page = rmPage;
     scanIoInit(&pageIo.p[pageIndex].ioscanpvt);
@@ -761,8 +773,8 @@ long vmi5588_pageInit
 void vmi5588_pvtInit
 (
     struct rmpvt **ppdpvt,  /* location for private pointer */
-    short rmPage,       /* rm page number */
-    short rmOffset,     /* offset into rm page */
+    short  rmPage,          /* rm page number */
+    short  rmOffset,        /* offset into rm page */
     struct rm_data *prmData /* pointer to shared memory */
 )
 {
@@ -782,7 +794,7 @@ void vmi5588_pvtInit
     *ppdpvt = prmpvt;
 }
 
-/*****************************************************************************
+/*****************************************************************************
 *
 * vmi5588_getIoscanpvt - look up I/O interrupt data structure
 *
@@ -848,6 +860,18 @@ long vmi5588_trigger
 
     return rmIntSend(1, -1);
 }
+
+
+/***************************************************************/
+/*  Function to tell us where the Reflective memory is located
+*/
+void *rmMemBase(void)
+{
+   if(prm == NULL)
+      return NULL;       /* Cardi/driver not installed properly */
+   else return (void *)prm->mem;
+}
+
 
 
 /* This must be called exactly once,  before iocinit() */
