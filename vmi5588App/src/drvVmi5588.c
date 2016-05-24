@@ -16,6 +16,17 @@
 modification history
 --------------------
 1994-10-10   anj   Original release 
+2016-05-24   mdw   Updated for EPICS OSI compliance. Also now recognizes
+                   the DMA version of the VMIVME5588 card, but does not
+                   implement any DMA functionality. Added a configure
+                   function to be called from the shell before iocinit()
+                   so you set parameters to other than the default. If you use
+                   a board with more than 256 kBytes of reflective ram, you will
+                   have to set the address jumpers on the board to a value appropriate
+                   for the amount of RAM and state the base address and the size of the
+                   memory in the configure function. This driver, however, will only use 
+                   256 kBytes, regardless. More (mostly trivial) modifications are needed
+                   to take advantage of larger memory sizes.
 
 DESCRIPTION
 This driver contains support routines for the VMIC VMIVME5588 Reflective
@@ -31,6 +42,7 @@ INCLUDE FILES: vmi5588.h
 #include    <epicsExit.h>
 #include    <epicsExport.h>
 #include    <epicsPrint.h>
+#include    <epicsInterrupt.h>
 #include    <cantProceed.h>
 #include    <errlog.h>
 #include    <dbDefs.h>
@@ -118,10 +130,10 @@ struct {
 epicsExportAddress(drvet, drvVmi5588);
 
 /* Array of interrupt service routine pointers */
-LOCAL void (*pisr[4])(int);
+LOCAL void (*pisr[4])(int); 
 
-/* LOCAL SYMTAB_ID rmSymTbl; */
-int rmMaxAttempts;
+/* LOCAL SYMTAB_ID rmSymTbl; */   /* was  this ever used? */
+int rmMaxAttempts;      /* what was this for?  Doesn't seem to be used anywhere */
 
 struct {
     long               number;
@@ -132,32 +144,36 @@ struct {
     } p[RM_NUM_PAGE];
 } pageIo;
 
-/* Memory layout of the reflective memory board */
-typedef struct {             /* VMIVME5588    */
-    char                     pad1;      /* unused    */
-    char                     boardId;       /* BID       */
-    volatile unsigned char   intRxStatus;   /* IRS       */
-    char                     pad2;      /* unused    */
-    unsigned char            nodeId;        /* NID       */
-    volatile unsigned char   boardCsr;      /* CSR       */
-    volatile unsigned short  cmd_Node;      /* CMD & CMDN    */
-    char                     pad3[24];      /* unused    */
-    struct {
-    char                     pad4[2];   /* unused    */
-    volatile unsigned char   senderId;  /* SIDn      */
-    volatile unsigned char   control;   /* CRn       */
-    }                        interrupt[4];  /* for n=0 to 3  */
-    struct {
-    char                     pad5[3];   /* unused    */
-    volatile unsigned char   number;    /* VRn       */
-    }                        vector[4];     /* for n=0 to 3  */
+/* Memory map of the reflective memory board */
+typedef struct {    /* VMIVME5588 Memory Map   */
+    epicsInt8         pad1;          /* 0x00 unused    */
+    epicsUInt8        boardId;       /* 0x01 BID       */
+    epicsUInt8        intRxStatus;   /* 0x02 IRS       */
+    epicsInt8         pad2;          /* 0x03 unused    */
+    epicsUInt8        nodeId;        /* 0x04 NID       */
+    epicsUInt8        boardCsr;      /* 0x05 CSR       */
+    epicsUInt16       cmd_Node;      /* 0x06 & 0x07 CMD & CMDN    */
+    epicsInt8         pad3[24];      /* 0x08 thru 0x21 unused    */
+
+    struct {                         /* 0x20 thru  0x2F */
+       epicsInt8      pad4[2];       /* unused    */
+       epicsUInt8     senderId;      /* SIDn      */
+       epicsUInt8     control;       /* CRn       */
+    } interrupt[4];                  /* for n=0 to 3  */
+
+    struct {                         /* 0x30 thru 0x3F */
+       epicsInt8      pad5[3];       /* unused    */
+       epicsUInt8     number;        /* VRn       */
+    } vector[4];                     /* for n=0 to 3  */
+
+    /* the following needs to be tweaked if we ever want to use more than 256 kB */
     /* Below here the card is just reflected RAM */
-    volatile int             test;      /* to check ring */
-    char                     pad6[0x100-0x44];  /* align to xx00 */
-    volatile short           pageFlag[RM_NUM_PAGE]; /* Update flags  */
-    short                    pad7[256-RM_NUM_PAGE]; /* align to xx00 */
-    char                     pad8[0x100];   /* align to x400 */
-    unsigned char   mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+    epicsInt32        test;                  /* 0x40 thru 0x43 - to check ring */
+    epicsInt8         pad6[0x100-0x44];      /* 0x44 thru 0xFF  */
+    epicsUInt16       pageFlag[RM_NUM_PAGE]; /* 0x100 thru 0x2FD - Update flags  */
+    epicsInt16        pad7[256-RM_NUM_PAGE]; /* 0x2FD thru 0x2FF */
+    epicsInt8         pad8[0x100];           /* 0x300 thru 0x3FF */
+    epicsUInt8        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
 } vmi5588_t;
 
 
@@ -180,17 +196,14 @@ vmi5588_t volatile *prm;
 * OK, or S_dev_??? errors.
 */
 
-long vmi5588_init
-(
-    void
-)
+long vmi5588_init(void)
 {
     int             i;
     long            status;
     short           test;
     const char      vmi5588[] = "vmi5588";
 
-    /* register the 5588 card in the A24 address space */
+    /* register the VMIVME5588 card in the A24 address space */
     status = devRegisterAddress(vmi5588, atVMEA24,  vmi5588_baseAddr,
                                 vmi5588_memSize, (void *)&prm);
     if (status != OK) {
@@ -216,24 +229,25 @@ long vmi5588_init
     }
 
 #ifdef RM_DEBUG
-      printf("%s: RM card at addr %p, Board ID=$%02x, Node ID=$%02x\n", __FILE__, prm, prm->boardId, prm->nodeId);
+      epicsPrintf("%s: RM card at addr %p, Board ID=$%02x, Node ID=$%02x\n", __FILE__, prm, prm->boardId, prm->nodeId);
 #endif
 
-      /* enable VMEbus Level 6 interrupts onto the card */
+      /* enable VMEbus interrupt level needed by this card */
       status = devEnableInterruptLevelVME(vmi5588_intLvl);
       if (status != OK)
-      return status;
+         return status;
 
       /* initialise the card interrupters */
       for (i = 0; i <= 3; i++) {
-      pisr[i] = NULL;
-      prm->vector[i].number = vmi5588_intVec + i;
-      };
+         pisr[i] = NULL;
+         prm->interrupt[i].control = 0;
+         prm->vector[i].number = vmi5588_intVec + i;
+      }
 
       /* turn any interrupts off if we do a reboot */
       epicsAtExit(vmi5588_reboot, NULL);
 
-      rmMaxAttempts = 0;
+      rmMaxAttempts = 0; /* what is this for? */
 
       /* Finally we turn off the FAIL LED */
       prm->boardCsr &= ~RM_CSR_FAIL;
@@ -253,7 +267,7 @@ long vmi5588_init
 *
 * EXAMPLE:
 * .CS
-*   -> vmi5588_report
+*   > vmi5588_report
 *   vmi5588: RM node 0x1, status 0x40, max 0 retries
 *   value = 0 = 0x0
 * .CE
@@ -267,53 +281,57 @@ long vmi5588_report (int level)
     if (prm == NULL)
     return S_dev_NoInit;
 
-    printf("vmi5588: RM node 0x%02x, status 0x%lx, max %d retries\n",
+    epicsPrintf("vmi5588: RM node 0x%02x, status 0x%lx, max %d retries\n",
            prm->nodeId, rmStatus(0), rmMaxAttempts);
-if(level >= 1) {
-    printf("test address = %p, mem starts at %p\n", &prm->test, prm->mem);
+
+    if(level >= 1) {
+       epicsPrintf("interrupt control registers at %p\n", prm->interrupt);
+       epicsPrintf("test address = %p\n", &prm->test);
+       epicsPrintf("page flags at %p\n", prm->pageFlag);
+       epicsPrintf("mem starts at %p\n",  prm->mem);
     
-    /* read status */
-    irs = prm->intRxStatus;
-    csr = prm->boardCsr;
+       /* read status */
+       irs = prm->intRxStatus;
+       csr = prm->boardCsr;
 
-    printf("    Receiver: %s, PLL %s%s%s\n",
-           irs & RM_IRS_RX_SIG ? "NO INPUT SIGNAL" : "Input signal good",
-           irs & RM_IRS_VIOLATION ? "RESYNC NEEDED" : "Locked",
-           irs & RM_IRS_LATCHED ? ", Recent Sync loss" : "",
-           irs & RM_IRS_RX_SYNC ? ", SYNC BIT HIGH" : "");
+       epicsPrintf("    Receiver: %s, PLL %s%s%s\n",
+              irs & RM_IRS_RX_SIG ? "NO INPUT SIGNAL" : "Input signal good",
+              irs & RM_IRS_VIOLATION ? "RESYNC NEEDED" : "Locked",
+              irs & RM_IRS_LATCHED ? ", Recent Sync loss" : "",
+              irs & RM_IRS_RX_SYNC ? ", SYNC BIT HIGH" : "");
 
-    printf("    Jumpers:  %s mode, Transfer Error Interrupt %s\n",
-           csr & RM_CSR_FAST ? "Fast" : "Slow",
-           csr & RM_CSR_MASK ? "Disabled" : "Enabled");
+       epicsPrintf("    Jumpers:  %s mode, Transfer Error Interrupt %s\n",
+              csr & RM_CSR_FAST ? "Fast" : "Slow",
+              csr & RM_CSR_MASK ? "Disabled" : "Enabled");
 
-    printf("    Status:   Fibre ring %s, %sFail LED %s\n",
-           csr & RM_CSR_OWN_DATA ? "Intact" : "BROKEN",
-           csr & RM_CSR_BAD_DATA ? "TRANSFER ERROR, " : "",
-           csr & RM_CSR_FAIL ? "ON" : "Off");
+       epicsPrintf("    Status:   Fibre ring %s, %sFail LED %s\n",
+              csr & RM_CSR_OWN_DATA ? "Intact" : "BROKEN",
+              csr & RM_CSR_BAD_DATA ? "TRANSFER ERROR, " : "",
+              csr & RM_CSR_FAIL ? "ON" : "Off");
 
-    printf("    FIFOs:    Transmitter %s, Receiver %s\n",
-           csr & RM_CSR_TX_EMPTY ? csr & RM_CSR_TX_HALF ?
-           "<50% Full" : ">50% FULL" : "Empty",
-           csr & RM_CSR_RX_HALF ? "<50% Full" : ">50% FULL");
+       epicsPrintf("    FIFOs:    Transmitter %s, Receiver %s\n",
+              csr & RM_CSR_TX_EMPTY ? csr & RM_CSR_TX_HALF ?
+              "<50% Full" : ">50% FULL" : "Empty",
+              csr & RM_CSR_RX_HALF ? "<50% Full" : ">50% FULL");
 
-    printf("    Int's:    %s%s%s (irs=0x%02x)\n",
-           irs & RM_IRS_INT1 ? "Irq 1 pending " : "",
-           irs & RM_IRS_INT2 ? "Irq 2 pending " : "",
-           irs & RM_IRS_INT3 ? "Irq 3 pending " : "",
-           irs);
+       epicsPrintf("    Int's:    %s%s%s (irs=0x%02x)\n",
+              irs & RM_IRS_INT1 ? "Irq 1 pending " : "",
+              irs & RM_IRS_INT2 ? "Irq 2 pending " : "",
+              irs & RM_IRS_INT3 ? "Irq 3 pending " : "",
+              irs);
 
-    for (i = 0; i <= 3; i++) {
-        icr = prm->interrupt[i].control;
+       for (i = 0; i <= 3; i++) {
+           icr = prm->interrupt[i].control;
 
-        printf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02x)\n", i,
-           pisr[i] != 0 ? "Allocated" : "Not in use",
-           icr & 7,
-           icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
-           icr & RM_CR_INT_AUTOCLR ? "Auto clear, " : "",
-           prm->vector[i].number,
-           icr);
+           epicsPrintf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02x); routine = %p \n", i,
+                  pisr[i] != 0 ? "Allocated" : "Not in use",
+                  icr & 7,
+                  icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
+                  icr & RM_CR_INT_AUTOCLR ? "Auto clear, " : "",
+                  prm->vector[i].number,
+                  icr, pisr[i]);
+       }
     }
-}
     return OK;
 }
 
@@ -336,7 +354,8 @@ LOCAL void vmi5588_reboot (void *p)
     int             i;
 
     for (i = 0; i <= 3; i++)
-    prm->interrupt[i].control &= ~RM_CR_INT_ENABLE;
+       prm->interrupt[i].control &= ~RM_CR_INT_ENABLE;
+    epicsPrintf("vmi5588_reboot(): Interrupts disabled.\n");
 }
 
 
@@ -360,42 +379,53 @@ epicsExportAddress (int, intr2cnt);
 int intr3cnt = 0;
 epicsExportAddress (int, intr3cnt);
 
+int latestIrqNum;
+epicsExportAddress(int, latestIrqNum);
 
 int volatile *intrCnts[] = {&intr0cnt, &intr1cnt, &intr2cnt, &intr3cnt};
 
-void vmi5588_intr(void *p)
+void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this interrupt */
 {
-   int irqNumber = *(int *)p;                            /* RM interrupt channel number */
+   int key = epicsInterruptLock();
+   int  irqNumber = (int)(long)p;   /* RM interrupt channel number */
+
+   latestIrqNum = irqNumber;
+
 
    if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
+      epicsInterruptUnlock(key);
       return;
    }
 
-   (*intrCnts[irqNumber])++;
-
    if (pisr[irqNumber] != NULL) {
       if (irqNumber > 0) {
-          int senderId = prm->interrupt[irqNumber].senderId;             /* read sender ID register */
-          /* (*pisr[irqNumber]) (prm->interrupt[irqNumber].senderId); */
-          (*pisr[irqNumber]) (senderId);                                 /* call user interrupt handler */
+          /* read sender ID register. This also re-arms the interrupt  */
+          int senderId = prm->interrupt[irqNumber].senderId; 
+          
+          /* call user interrupt handler */
+          (*pisr[irqNumber]) (senderId);
       }
       else
+          /* call user interrupt handler for internally generated interrupt */
           (*pisr[irqNumber]) (0);
 
-
-      /* prm->interrupt[irqNumber].senderId = 0xff;  */                      /* clear interrupt fifo */
-
-      /* finally re-initialise the interrupt hardware */
-      /* prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | */
-      prm->interrupt[irqNumber].control = vmi5588_intLvl | 
-                                          RM_CR_INT_ENABLE | 
+      /* Re-initialise the interrupt hardware */
+      prm->interrupt[irqNumber].control = vmi5588_intLvl    | 
+                                          RM_CR_INT_ENABLE  |  
                                           RM_CR_INT_AUTOCLR;
    }
-#if 0
+
+
+   /*  you can only get here if you connect an interrupt to a NULL pointer 
+       instead of an interrupt service routine   */
    else
        errlogPrintf("%s: RM Interrupt #%d while disconnected", 
         __FILE__, irqNumber);
-#endif
+
+
+   /* finally, tally the interrupt */
+   (*intrCnts[irqNumber])++;
+   epicsInterruptUnlock(key);
 }
 
 /*****************************************************************************
@@ -436,8 +466,8 @@ void vmi5588_intr(void *p)
 
 long rmIntConnect
 (
-    int irqNumber,           /* RM interrupt channel */
-    void (*proutine)(int)    /* routine to call on int */
+    int  irqNumber,            /* RM interrupt channel */
+    void (*proutine)(int)           /* routine to call on int */
 )
 {
     long status;
@@ -451,7 +481,7 @@ long rmIntConnect
 
     /* plug in our wrapper routine */
     status = devConnectInterruptVME(vmi5588_intVec + irqNumber,
-                                 vmi5588_intr, (void *)&irqNumber);
+                                 vmi5588_intr, (void *)(long)irqNumber);
     if (status != OK)
        return status;
 
@@ -464,11 +494,11 @@ long rmIntConnect
 
     /* finally enable the hardware */
     /* prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | */
-    prm->interrupt[irqNumber].control = vmi5588_intLvl | 
-                                        RM_CR_INT_ENABLE | 
-                                        RM_CR_INT_AUTOCLR;
+    prm->interrupt[irqNumber].control = vmi5588_intLvl    | 
+                                        RM_CR_INT_ENABLE  | 
+                                        RM_CR_INT_AUTOCLR;   
 
-printf("RM: enabled INT #%d, routine=%p, CR=0x%02x\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
+       epicsPrintf("RM: enabled INT #%d, routine=%p, CR=0x%02x\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
     return OK;
 }
 
@@ -579,10 +609,7 @@ long rmIntSend
 *
 */
 
-long rmNodeId
-(
-    void
-)
+long rmNodeId(void)
 {
     if (prm == NULL)
     return S_dev_NoInit;
@@ -751,7 +778,7 @@ long vmi5588_pageInit
     pageIo.number++;
 
 #ifdef RM_DEBUG
-    printf("Init pageIo index <%hd> page <%ld>\n",
+    epicsPrintf("Init pageIo index <%hd> page <%ld>\n",
            pageIndex, pageIo.number);
 #endif
 
@@ -853,7 +880,7 @@ long vmi5588_trigger
     prm->pageFlag[rmPage] = (prm->nodeId << 8) + nodeIDcounter++;
 
 #ifdef RM_DEBUG
-    printf("page <%hd>  pageFlag[page] <%hd>\n",
+    epicsPrintf("page <%hd>  pageFlag[page] <%hd>\n",
             rmPage, prm->pageFlag[rmPage]);
     errlogPrintf("sending interrupt to all RMs\n");
 #endif
@@ -865,16 +892,16 @@ long vmi5588_trigger
 /***************************************************************/
 /*  Function to tell us where the Reflective memory is located
 */
-void *rmMemBase(void)
+void *rmPageMemBase(void)
 {
    if(prm == NULL)
-      return NULL;       /* Cardi/driver not installed properly */
+      return NULL;       /* Card/driver not installed properly */
    else return (void *)prm->mem;
 }
 
 
 
-/* This must be called exactly once,  before iocinit() */
+/* This must be called before iocinit() */
 int drvVmi5588Config(unsigned baseAddr, unsigned memSize, unsigned intVec, unsigned intLvl)
 {
    vmi5588_baseAddr = baseAddr;

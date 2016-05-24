@@ -103,7 +103,7 @@ long   rmIntDisconnect(int irqNumber);
 long   rmIntSend(int irqNumber, int nodeId);
 long   rmNodeId(void);
 unsigned long   rmStatus(long reset);
-void * rmMemBase(void);
+void * rmPageMemBase(void);
 
 
 /* Routines for use within device support only */
