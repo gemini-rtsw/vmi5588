@@ -1,0 +1,2 @@
+registrar(ppStartRegisterCommands)
+variable(pingpongISR_count, int)

@@ -79,24 +79,24 @@ static long init_record(struct biRecord *prec)
 
     /* bi.inp must be an INST_IO */
     switch (prec->inp.type) {
-    case (INST_IO) :
-    pinstio = (struct instio *)&(prec->inp.value);
-    break;
-    default :
-    recGblRecordError(S_db_badField,(void *)prec,
-        "devBiVmi5588: Illegal INP field type");
-    return(S_db_badField);
+       case (INST_IO) :
+          pinstio = (struct instio *)&(prec->inp.value);
+          break;
+       default :
+          recGblRecordError(S_db_badField,(void *)prec,
+                "devBiVmi5588: Illegal INP field type");
+          return(S_db_badField);
     }
 
     prec->mask=0;
     for (i=0; rmState[i].string != NULL; i++)
-    if (strcmp(pinstio->string, rmState[i].string) == 0)
-        prec->mask=rmState[i].mask;
+       if (strcmp(pinstio->string, rmState[i].string) == 0)
+          prec->mask=rmState[i].mask;
 
     if (prec->mask == 0) {
-    recGblRecordError(S_db_badField,(void *)prec,
-        "devBiVmi5588: unrecognised RM Status string");
-        return(S_db_badField);
+       recGblRecordError(S_db_badField,(void *)prec,
+           "devBiVmi5588: unrecognised RM Status string");
+       return(S_db_badField);
     }
     return(0);
 }
