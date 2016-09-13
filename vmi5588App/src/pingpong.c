@@ -18,11 +18,13 @@
 unsigned int pingpongISR_count = 0;
 epicsExportAddress(int, pingpongISR_count);
 int stop = 0;
+int isrnode = -1;
 epicsEventId intFlag;
 epicsThreadId tid = 0;
 
 /*******************************************************************/
 void pingpongISR(int node) {
+   isrnode = node; 
    pingpongISR_count++;
    epicsEventSignal(intFlag);
 }
@@ -33,6 +35,30 @@ void pingpongISR(int node) {
 #define quarterMeg (oneK * BLKLEN) /*256 k*/
 
 #define _pEnd (oneK - 2)
+
+
+void checkEcho(void) {
+
+    unsigned long i, cksum;
+    volatile unsigned long *pdata;
+    volatile unsigned long *pEchoData;
+
+    pdata = (volatile unsigned long *) prm->mem;
+    pEchoData = pdata+(BLKLEN * 128); /*offset into next 256k block*/
+    cksum=0;
+
+    for (i=0; i<sizeof(pEchoData)*(BLKLEN-2); i+=4)  {
+
+        cksum += *pEchoData;
+        if (i<16)
+            printf("EchoData: val[%p] = %lu\n", pEchoData, *pEchoData );
+        pEchoData++;
+    }
+
+    printf("checkEcho ending at %p with calculated cksum =%lu and received cksum val= %lu\n\n",
+            pEchoData, cksum, *pEchoData );
+}
+
 
 void clearMemory(volatile unsigned long *p) {
     int i;
@@ -86,11 +112,11 @@ void pingPong(void *p) {
 
     printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
 
-   /* if we're node 0, we kick things off */
-   if(nodeId == 0) {
+   /* if we're node 1, we kick things off */
+   if(nodeId == 1) {
       //errlogPrintf("Initial serve...\n");
       /* tell other system that new data is available */
-      rmIntSend(INT2, -1);
+      rmIntSend(INT2, 2); /*Interrupt Int2 on Node 2 */
    }
 
    while(1) {
@@ -105,9 +131,13 @@ void pingPong(void *p) {
       //errlogPrintf("Check Echo region at %p with = %lu\n\n", pData, *pData );
       //
       /* wait another 2 seconds */
-      epicsThreadSleep(1.0); 
+      epicsThreadSleep(2.0); 
       
       /* increment RM data storage */
+
+      if(isrnode == 2) { //rx-side Node nodeId is 2 interrupting nodeId1
+        checkEcho();
+      }
 
       cksum=0;
 
