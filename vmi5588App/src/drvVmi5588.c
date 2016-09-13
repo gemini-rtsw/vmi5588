@@ -325,7 +325,7 @@ long vmi5588_report (int level)
        for (i = 0; i <= 3; i++) {
            icr = prm->interrupt[i].control;
 
-           epicsPrintf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02hhx); routine = %p \n", i,
+           epicsPrintf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02x); routine = %p \n", i,
                   pisr[i] != 0 ? "Allocated" : "Not in use",
                   icr & 7,
                   icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
@@ -427,9 +427,9 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
 
    /*  you can only get here if you connect an interrupt to a NULL pointer 
        instead of an interrupt service routine   */
-   else
-   /* tally the interrupt */
-   (*intrCnts[0])++;
+   else {
+       (*intrCnts[0])++;
+   }
 
    epicsInterruptUnlock(key);
 }
