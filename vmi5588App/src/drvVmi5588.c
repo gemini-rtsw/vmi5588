@@ -62,8 +62,8 @@ INCLUDE FILES: vmi5588.h
 #define RM_DEBUG 1
 
 /* Board identification (hardcoded into the board's firmware)  */
-#define RM_BOARD_ID        0x1b   /* ID of non-DMA VMI5588 */
-#define RM_DMA_BOARD_ID    0x42   /* ID of VMI5588DMA      */
+#define RM_BOARD_ID        0x42   /* ID of non-DMA VMI5588 */
+#define RM_DMA_BOARD_ID    0x4b   /* ID of VMI5588DMA      */
 
 /* intRxStatus bits */
 #define RM_IRS_INT1        0x01
