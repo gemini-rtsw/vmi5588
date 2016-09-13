@@ -220,8 +220,8 @@ long vmi5588_init(void)
     }
     
     /* is this the right kind of card? */
-    //if ((prm->boardId != RM_BOARD_ID) && (prm->boardId != RM_DMA_BOARD_ID))    {
-    if (prm->boardId != RM_BOARD_ID)    {
+    if ((prm->boardId != RM_BOARD_ID) && (prm->boardId != RM_DMA_BOARD_ID))    {
+    //if (prm->boardId != RM_BOARD_ID)    {
        errlogPrintf("Test read 0x%04hx read from prm->boardId: 0x%02hhx\n", test, prm->boardId);   
        errlogPrintf("vmi5588: wrong device ID, expected $%02x or $%02x, found $%02x\n",
                      RM_BOARD_ID, RM_DMA_BOARD_ID, prm->boardId); 
@@ -283,8 +283,8 @@ long vmi5588_report (int level)
     if (prm == NULL)
     return S_dev_NoInit;
 
-    epicsPrintf("vmi5588: RM node 0x%02x, status 0x%lx, max %d retries\n",
-           prm->nodeId, rmStatus(0), rmMaxAttempts);
+    epicsPrintf("vmi5588: RM node 0x%02x, BoadID 0x%02x, status 0x%lx, max %d retries\n",
+           prm->nodeId, prm->boardId, rmStatus(0), rmMaxAttempts);
 
     if(level >= 1) {
        epicsPrintf("interrupt control registers at %p\n", prm->interrupt);
@@ -428,9 +428,8 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
    /*  you can only get here if you connect an interrupt to a NULL pointer 
        instead of an interrupt service routine   */
    else
-       errlogPrintf("%s: RM Interrupt #%d while disconnected", 
-        __FILE__, irqNumber);
-
+   /* tally the interrupt */
+   (*intrCnts[0])++;
 
    epicsInterruptUnlock(key);
 }
