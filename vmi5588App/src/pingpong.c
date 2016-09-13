@@ -153,10 +153,13 @@ void pingPong(void *p) {
 
       printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
 
-      //*pData = rand();
       /* tell other system that new data is available */
-      rmIntSend(INT2, -1);
-      /*printf("Pong! (data = %ld)\n", *pData);*/
+      if (isrnode == 1)
+          rmIntSend(INT2, 2);
+      else if (isrnode == 2)
+          rmIntSend(INT2, 1);
+      else
+        errlogPrintf("isrnode %d out of range\n", isrnode);
    }
 }
 
