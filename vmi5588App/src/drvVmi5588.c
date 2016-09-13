@@ -62,8 +62,8 @@ INCLUDE FILES: vmi5588.h
 #define RM_DEBUG 1
 
 /* Board identification (hardcoded into the board's firmware)  */
-#define RM_BOARD_ID        0x42   /* ID of non-DMA VMI5588 */
-#define RM_DMA_BOARD_ID    0x4b   /* ID of VMI5588DMA      */
+#define RM_BOARD_ID        0x1b   /* ID of non-DMA VMI5588 */
+#define RM_DMA_BOARD_ID    0x42   /* ID of VMI5588DMA      */
 
 /* intRxStatus bits */
 #define RM_IRS_INT1        0x01
@@ -220,7 +220,9 @@ long vmi5588_init(void)
     }
     
     /* is this the right kind of card? */
-    if ((prm->boardId != RM_BOARD_ID) && (prm->boardId != RM_DMA_BOARD_ID))    {
+    //if ((prm->boardId != RM_BOARD_ID) && (prm->boardId != RM_DMA_BOARD_ID))    {
+    if (prm->boardId != RM_BOARD_ID)    {
+       errlogPrintf("Test read 0x%04hx read from prm->boardId: 0x%02hhx\n", test, prm->boardId);   
        errlogPrintf("vmi5588: wrong device ID, expected $%02x or $%02x, found $%02x\n",
                      RM_BOARD_ID, RM_DMA_BOARD_ID, prm->boardId); 
        devUnregisterAddress(atVMEA24, vmi5588_baseAddr, vmi5588);
@@ -323,7 +325,7 @@ long vmi5588_report (int level)
        for (i = 0; i <= 3; i++) {
            icr = prm->interrupt[i].control;
 
-           epicsPrintf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02x); routine = %p \n", i,
+           epicsPrintf("       Int %d: %s, Level %d %s, %svector %x (icr=0x%02hhx); routine = %p \n", i,
                   pisr[i] != 0 ? "Allocated" : "Not in use",
                   icr & 7,
                   icr & RM_CR_INT_ENABLE ? "enabled" : "disabled",
@@ -397,6 +399,9 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
       return;
    }
 
+   /* tally the interrupt */
+   (*intrCnts[irqNumber])++;
+
    if (pisr[irqNumber] != NULL) {
       if (irqNumber > 0) {
           /* read sender ID register. This also re-arms the interrupt  */
@@ -410,9 +415,13 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
           (*pisr[irqNumber]) (0);
 
       /* Re-initialise the interrupt hardware */
+
+      prm->interrupt[irqNumber].control = 0x1E;
+#if 0
       prm->interrupt[irqNumber].control = vmi5588_intLvl    | 
                                           RM_CR_INT_ENABLE  |  
                                           RM_CR_INT_AUTOCLR;
+#endif
    }
 
 
@@ -423,8 +432,6 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
         __FILE__, irqNumber);
 
 
-   /* finally, tally the interrupt */
-   (*intrCnts[irqNumber])++;
    epicsInterruptUnlock(key);
 }
 
@@ -471,6 +478,7 @@ long rmIntConnect
 )
 {
     long status;
+    unsigned char icr;
 
     if (prm == NULL)
        return S_dev_NoInit;
@@ -480,10 +488,10 @@ long rmIntConnect
        return S_dev_vectorInUse;
 
     /* plug in our wrapper routine */
-    status = devConnectInterruptVME(vmi5588_intVec + irqNumber,
-                                 vmi5588_intr, (void *)(long)irqNumber);
+    status = devConnectInterruptVME(vmi5588_intVec + irqNumber, vmi5588_intr, (void *)(long)irqNumber);
     if (status != OK)
        return status;
+
 
     /* save the routine pointer */
     pisr[irqNumber] = proutine;
@@ -493,12 +501,18 @@ long rmIntConnect
        prm->interrupt[irqNumber].senderId = 0;
 
     /* finally enable the hardware */
-    /* prm->interrupt[irqNumber].control = RM_CR_INT_LEVEL6 | */
+    icr = prm->interrupt[irqNumber].control;
+
+    icr = 0x1E;
+#if 0
     prm->interrupt[irqNumber].control = vmi5588_intLvl    | 
                                         RM_CR_INT_ENABLE  | 
                                         RM_CR_INT_AUTOCLR;   
-
-       epicsPrintf("RM: enabled INT #%d, routine=%p, CR=0x%02x\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
+#endif
+    status = devEnableInterruptLevelVME(vmi5588_intLvl);
+    if (status != OK)
+       return status;
+    epicsPrintf("RM: enabled INT #%d, routine=%p, CR=0x%02hhx\n", irqNumber, pisr[irqNumber], icr);
     return OK;
 }
 
@@ -540,9 +554,11 @@ long rmIntDisconnect
     /* flag interrupt unused */
     pisr[irqNumber] = NULL;
 
+    /* disable interrupt level*/
+    devDisableInterruptLevelVME(vmi5588_intLvl);
+    
     /* disconnect the software */
-    return devDisconnectInterruptVME(vmi5588_intVec + irqNumber,
-                                  vmi5588_intr);
+    return devDisconnectInterruptVME(vmi5588_intVec + irqNumber, vmi5588_intr);
 }
 
 /*****************************************************************************
