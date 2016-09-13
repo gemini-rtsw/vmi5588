@@ -43,7 +43,7 @@ void checkEcho(void) {
     volatile unsigned long *pdata;
     volatile unsigned long *pEchoData;
 
-    pdata = (volatile unsigned long *) prm->mem;
+    pdata = (volatile unsigned long*)rmPageMemBase();
     pEchoData = pdata+(BLKLEN * 128); /*offset into next 256k block*/
     cksum=0;
 
