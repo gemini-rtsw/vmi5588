@@ -121,7 +121,7 @@ void pingPong(void *p) {
    while(1) {
       if (stop) epicsThreadSuspendSelf();
 
-      errlogPrintf("Waiting ...");
+      errlogPrintf("Waiting ... isrnode=%d",isrnode);
       /* wait for interrupt */
       epicsEventMustWait(intFlag);
 
