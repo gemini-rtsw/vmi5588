@@ -96,33 +96,32 @@ void pingPong(void *p) {
 
     }
 
-    printf("starting at %p\n", pdata);
-    cksum=0;
+    if(nodeId == 1) {
+        printf("starting at %p\n", pdata);
+        cksum=0;
+        for (i=0; i<_pEnd; i+=4)  {
 
-    for (i=0; i<_pEnd; i+=4)  {
+            *pdata = i;
+            if ( i<16 || i== _pEnd) 
+                printf("val[%p] = %lu\n", pdata, *pdata );
 
-        *pdata = i;
-        if ( i<16 || i== _pEnd) 
-            printf("val[%p] = %lu\n", pdata, *pdata );
+            cksum += *pdata;
+            pdata++;
+        }
+        *pdata = cksum;
 
-        cksum += *pdata;
-        pdata++;
+        printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
+
+        /* if we're node 1, we kick things off */
+        //errlogPrintf("Initial serve...\n");
+        /* tell other system that new data is available */
+        rmIntSend(INT2, 2); /*Interrupt Int2 on Node 2 */
     }
-    *pdata = cksum;
-
-    printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
-
-   /* if we're node 1, we kick things off */
-   if(nodeId == 1) {
-      //errlogPrintf("Initial serve...\n");
-      /* tell other system that new data is available */
-      rmIntSend(INT2, 2); /*Interrupt Int2 on Node 2 */
-   }
 
    while(1) {
       if (stop) epicsThreadSuspendSelf();
 
-      //errlogPrintf("Waiting ...");
+      errlogPrintf("Waiting ...");
       /* wait for interrupt */
       epicsEventMustWait(intFlag);
 
