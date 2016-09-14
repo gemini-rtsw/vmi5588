@@ -154,9 +154,9 @@ void pingPong(void *p) {
 
       /* tell other system that new data is available */
       if (isrnode == 1)
-          rmIntSend(INT2, 2);
-      else if (isrnode == 2)
           rmIntSend(INT2, 1);
+      else if (isrnode == 2)
+          rmIntSend(INT2, 2);
       else
         errlogPrintf("isrnode %d out of range\n", isrnode);
    }
