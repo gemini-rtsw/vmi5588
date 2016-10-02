@@ -1,0 +1,11 @@
+# Reflective Memory Device Support
+device( bi, INST_IO, devBiVmi5588,     "VMI5588 Synchro Bus" )
+
+driver(drvVmi5588)
+registrar(drvVmi5588RegisterCommands)
+
+variable(intr0cnt, int)
+variable(intr1cnt, int)
+variable(intr2cnt, int)
+variable(intr3cnt, int)
+variable(latestIrqNum, int)
