@@ -1,0 +1,463 @@
+
+file {
+	name="/home/mrippa/synchro.adl"
+	version=030107
+}
+display {
+	object {
+		x=703
+		y=283
+		width=557
+		height=430
+	}
+	clr=0
+	bclr=54
+	cmap="colors.dl"
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+text {
+	object {
+		x=20
+		y=10
+		width=322
+		height=28
+	}
+	"basic attribute" {
+		clr=1
+		fill="outline"
+	}
+	textix="Synchro Bus Status"
+}
+text {
+	object {
+		x=19
+		y=62
+		width=132
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Input Signal"
+}
+rectangle {
+	object {
+		x=12
+		y=51
+		width=529
+		height=367
+	}
+	"basic attribute" {
+		clr=12
+		fill="outline"
+		width=2
+	}
+}
+rectangle {
+	object {
+		x=11
+		y=5
+		width=528
+		height=39
+	}
+	"basic attribute" {
+		clr=54
+		fill="outline"
+	}
+}
+text {
+	object {
+		x=19
+		y=116
+		width=127
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Ring Status"
+}
+text {
+	object {
+		x=206
+		y=172
+		width=96
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Rx FIFO"
+}
+text {
+	object {
+		x=384
+		y=225
+		width=68
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Int 3"
+}
+text {
+	object {
+		x=207
+		y=62
+		width=112
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="PLL Synch"
+}
+text {
+	object {
+		x=207
+		y=116
+		width=120
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="CRC status"
+}
+text {
+	object {
+		x=207
+		y=225
+		width=65
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Int 2"
+}
+text {
+	object {
+		x=383
+		y=62
+		width=119
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Input Sync"
+}
+text {
+	object {
+		x=18
+		y=172
+		width=92
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Tx FIFO"
+}
+text {
+	object {
+		x=19
+		y=225
+		width=71
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Int 1"
+}
+text {
+	object {
+		x=207
+		y=289
+		width=257
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Last frame acknowledged"
+}
+text {
+	object {
+		x=19
+		y=289
+		width=172
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="Last frame sent"
+}
+text {
+	object {
+		x=207
+		y=352
+		width=228
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="M2 heartbeat"
+}
+text {
+	object {
+		x=19
+		y=352
+		width=145
+		height=16
+	}
+	"basic attribute" {
+		clr=0
+		fill="outline"
+	}
+	textix="SCS heartbeat"
+}
+"text update" {
+	object {
+		x=19
+		y=84
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)input.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=19
+		y=138
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)ring.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=206
+		y=190
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)rxfifo.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=384
+		y=247
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)int3.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=207
+		y=84
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)pll.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=207
+		y=138
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)crc.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=207
+		y=247
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)int2.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=383
+		y=84
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)sync.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=18
+		y=190
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)txfifo.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=19
+		y=247
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)int1.VAL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=207
+		y=310
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)real.VALB"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=19
+		y=310
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)displayScs.VALU"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=207
+		y=373
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)real.VALL"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=19
+		y=373
+		width=130
+		height=30
+	}
+	monitor {
+		chan="$(T)displayScs.VALM"
+		clr=0
+		bclr=7
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
