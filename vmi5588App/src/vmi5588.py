@@ -10,7 +10,7 @@ target_ioc = str(sys.argv[1])
 print target_ioc
 
 medm = '/gem_sw/epics/R3.14.12.4/extensions/bin/linux-x86_64/medm'
-vmi5588 = '/gem_sw/work/R3.14.12.4/support/vmi5588/adl/vmi5588.adl'
+vmi5588 = '/gem_sw/work/R3.14.12.4/support/vmi5588/bin/linux-x86_64/vmi5588.adl'
 p1 = subprocess.Popen(['host', target_ioc], stdout=subprocess.PIPE)
 p2 = subprocess.Popen(['awk', '/has address/ { print $4 ; exit}'], stdin=p1.stdout, stdout=subprocess.PIPE)
 ipaddress = p2.communicate()[0]
