@@ -517,7 +517,8 @@ long rmIntConnect
                                         RM_CR_INT_ENABLE  | 
                                         RM_CR_INT_AUTOCLR;   
 
-       epicsPrintf("RM: enabled INT #%d, routine=%p, CR=0x%02hhx\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
+    epicsPrintf("RM: enabled INT #%d, routine=%p, CR=0x%02hhx\n", irqNumber, pisr[irqNumber], prm->interrupt[irqNumber].control);
+    epicsThreadSleep(1.0);
     return OK;
 }
 
