@@ -1,0 +1,126 @@
+[schematic2]
+uniq 230
+[tools]
+[detail]
+w 738 1627 100 0 n#191 hwin.hwin#189.in 768 1616 768 1616 ebis.int2.INP
+w 738 1467 100 0 n#186 ebis.int3.INP 768 1456 768 1456 hwin.hwin#188.in
+w 738 1819 100 0 n#180 ebis.int1.INP 768 1808 768 1808 hwin.hwin#182.in
+w 738 2139 100 0 n#179 hwin.hwin#177.in 768 2128 768 2128 ebis.txfifo.INP
+w 738 2299 100 0 n#174 ebis.crc.INP 768 2288 768 2288 hwin.hwin#176.in
+w 738 1979 100 0 n#171 ebis.rxfifo.INP 768 1968 768 1968 hwin.hwin#173.in
+w 738 2459 100 0 n#159 ebis.ring.INP 768 2448 768 2448 hwin.hwin#161.in
+w 738 2779 100 0 n#158 hwin.hwin#156.in 768 2768 768 2768 ebis.pll.INP
+w 738 2939 100 0 n#153 ebis.input.INP 768 2928 768 2928 hwin.hwin#155.in
+w 738 2619 100 0 n#151 hwin.hwin#150.in 768 2608 768 2608 ebis.sync.INP
+s 2592 3024 100 0 refmem.sch
+s 2784 864 100 0 Secondary Control System
+s 2784 800 100 0 Reflective Memory Driver
+s 3056 736 100 0 1
+s 3152 736 100 0 1
+s 2544 752 100 0 author: S.Prior
+s 2544 720 100 0 checked: S.Prior
+s 2816 752 100 0 04-sep_96
+[cell use]
+use hwin 576 1575 100 0 hwin#189
+xform 0 672 1616
+p 579 1608 100 0 -1 val(in):@RM_IRQ2
+use hwin 576 1415 100 0 hwin#188
+xform 0 672 1456
+p 579 1448 100 0 -1 val(in):@RM_IRQ3
+use hwin 576 1767 100 0 hwin#182
+xform 0 672 1808
+p 579 1800 100 0 -1 val(in):@RM_IRQ1
+use hwin 576 2087 100 0 hwin#177
+xform 0 672 2128
+p 579 2120 100 0 -1 val(in):@RM_TXHALF
+use hwin 576 2247 100 0 hwin#176
+xform 0 672 2288
+p 579 2280 100 0 -1 val(in):@RM_BADXFR
+use hwin 576 1927 100 0 hwin#173
+xform 0 672 1968
+p 579 1960 100 0 -1 val(in):@RM_RXHALF
+use hwin 576 2407 100 0 hwin#161
+xform 0 672 2448
+p 579 2440 100 0 -1 val(in):@RM_NORING
+use hwin 576 2727 100 0 hwin#156
+xform 0 672 2768
+p 579 2760 100 0 -1 val(in):@RM_NOSYNC
+use hwin 576 2887 100 0 hwin#155
+xform 0 672 2928
+p 579 2920 100 0 -1 val(in):@RM_NOSIG
+use hwin 576 2567 100 0 hwin#150
+xform 0 672 2608
+p 579 2600 100 0 -1 val(in):@RM_RESYNC
+use ebis 768 1511 100 0 int2
+xform 0 896 1584
+p 656 1710 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 1422 100 0 0 ONAM:PENDING
+p 1088 1600 100 0 1 PV:$(top)
+p 544 1582 100 0 0 SCAN:1 second
+p 544 1454 100 0 0 ZNAM:NONE
+use ebis 768 1351 100 0 int3
+xform 0 896 1424
+p 656 1550 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 1262 100 0 0 ONAM:PENDING
+p 1088 1440 100 0 1 PV:$(top)
+p 544 1422 100 0 0 SCAN:1 second
+p 544 1294 100 0 0 ZNAM:NONE
+use ebis 768 1703 100 0 int1
+xform 0 896 1776
+p 656 1902 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 1614 100 0 0 ONAM:PENDING
+p 1088 1792 100 0 1 PV:$(top)
+p 544 1774 100 0 0 SCAN:1 second
+p 544 1646 100 0 0 ZNAM:NONE
+use ebis 768 2023 100 0 txfifo
+xform 0 896 2096
+p 656 2222 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 1934 100 0 0 ONAM:HALF
+p 1088 2112 100 0 1 PV:$(top)
+p 544 2094 100 0 0 SCAN:1 second
+p 544 1966 100 0 0 ZNAM:OK
+use ebis 768 2183 100 0 crc
+xform 0 896 2256
+p 656 2382 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 2094 100 0 0 ONAM:BAD
+p 1088 2272 100 0 1 PV:$(top)
+p 544 2254 100 0 0 SCAN:1 second
+p 544 2126 100 0 0 ZNAM:OK
+use ebis 768 1863 100 0 rxfifo
+xform 0 896 1936
+p 656 2062 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 1774 100 0 0 ONAM:HALF
+p 1088 1952 100 0 1 PV:$(top)
+p 544 1934 100 0 0 SCAN:1 second
+p 544 1806 100 0 0 ZNAM:OK
+use ebis 768 2343 100 0 ring
+xform 0 896 2416
+p 656 2542 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 2254 100 0 0 ONAM:BROKEN
+p 1088 2432 100 0 1 PV:$(top)
+p 544 2414 100 0 0 SCAN:1 second
+p 544 2286 100 0 0 ZNAM:OK
+use ebis 768 2663 100 0 pll
+xform 0 896 2736
+p 656 2862 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 2574 100 0 0 ONAM:LOST
+p 1088 2752 100 0 1 PV:$(top)
+p 544 2734 100 0 0 SCAN:1 second
+p 544 2606 100 0 0 ZNAM:OK
+use ebis 768 2823 100 0 input
+xform 0 896 2896
+p 656 3022 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 2734 100 0 0 ONAM:LOST
+p 1088 2912 100 0 1 PV:$(top)
+p 544 2894 100 0 0 SCAN:1 second
+p 544 2766 100 0 0 ZNAM:OK
+use ebis 768 2503 100 0 sync
+xform 0 896 2576
+p 656 2702 100 0 0 DTYP:VMI5588 Synchro Bus
+p 544 2414 100 0 0 ONAM:LOST
+p 1088 2592 100 0 1 PV:$(top)
+p 544 2574 100 0 0 SCAN:1 second
+p 544 2446 100 0 0 ZNAM:OK
+use bc200tr -32 584 -100 0 frame
+xform 0 1648 1888
+[comments]
