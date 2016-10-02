@@ -18,7 +18,8 @@ LIBRARY_IOC += pingpong
 pingpong_SRCS += pingpong.c
 DBD += pingpong.dbd
 
-SCRIPTS_HOST = ../vmi5588.py
+SCRIPTS_HOST += ../vmi5588.py
+SCRIPTS_HOST += ../vmi5588.adl
 
 include $(TOP)/configure/RULES
 
