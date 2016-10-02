@@ -19,6 +19,7 @@ unsigned int pingpongISR_count = 0;
 epicsExportAddress(int, pingpongISR_count);
 int stop = 0;
 int isrnode = -1;
+int prepared = 0;
 epicsEventId intFlag;
 epicsThreadId tid = 0;
 
@@ -29,13 +30,37 @@ void pingpongISR(int node) {
    epicsEventSignal(intFlag);
 }
 #define BLKLEN 256
-#define oneK (sizeof(unsigned long) * BLKLEN )
+#define WORDSIZE sizeof(unsigned long) /*4 bytes*/
+#define oneK (WORDSIZE * BLKLEN )
 #define sixteenthMeg (oneK * 64)  /*64 k*/
 #define eighthMeg (oneK * 128)  /*128 k*/
 #define quarterMeg (oneK * BLKLEN) /*256 k*/
+#define _pEnd (eighthMeg - 1*WORDSIZE)
+#define END 128*WORDSIZE*BLKLEN-(3*WORDSIZE)
 
-#define _pEnd (oneK - 2)
+enum machines {VME_0, VME_1, VME_2, CEM=1};
 
+// Assumes 0 <= max <= RAND_MAX
+// Returns in the closed interval [0, max]
+// From http://stackoverflow.com/questions/2509679/how-to-generate-a-random-number-from-within-a-range
+long random_at_most(long max) {
+  unsigned long
+    // max <= RAND_MAX < ULONG_MAX, so this is okay.
+    num_bins = (unsigned long) max + 1,
+    num_rand = (unsigned long) RAND_MAX + 1,
+    bin_size = num_rand / num_bins,
+    defect   = num_rand % num_bins;
+
+  long x;
+  do {
+   x = rand();
+  }
+  // This is carefully written not to overflow
+  while (num_rand - defect <= (unsigned long)x);
+
+  // Truncated division is intentional
+  return x/bin_size;
+}
 
 void checkEcho(void) {
 
@@ -44,18 +69,17 @@ void checkEcho(void) {
     volatile unsigned long *pEchoData;
 
     pdata = (volatile unsigned long*)rmPageMemBase();
-    pEchoData = pdata+(BLKLEN * 128); /*offset into next 256k block*/
+    pEchoData = pdata+(BLKLEN * 128); /*offset into next block to see echo area*/
     cksum=0;
 
-    for (i=0; i<sizeof(pEchoData)*(BLKLEN-2); i+=4)  {
-
+    for (i=0; i<_pEnd; i+=4)  {
         cksum += *pEchoData;
-        if (i<16)
-            printf("EchoData: val[%p] = %lu\n", pEchoData, *pEchoData );
+        if ( i<16|| i== END) 
+            printf("echoval[%p] = %lu\n\n", pEchoData, *pEchoData );
         pEchoData++;
     }
 
-    printf("checkEcho ending at %p with calculated cksum =%lu and received cksum val= %lu\n\n",
+    printf("checkEcho ending at %p, cksum =%lu, received cksum val= %lu\n",
             pEchoData, cksum, *pEchoData );
 }
 
@@ -96,13 +120,14 @@ void pingPong(void *p) {
 
     }
 
-    if(nodeId == 1) {
+    /*VME_0 VME_1 VME_2 and CEM*/
+    if(nodeId == VME_0 ) {
         printf("starting at %p\n", pdata);
         cksum=0;
         for (i=0; i<_pEnd; i+=4)  {
 
-            *pdata = i;
-            if ( i<16 || i== _pEnd) 
+            *pdata = random_at_most(65535);
+            if ( i<16 || i==END) 
                 printf("val[%p] = %lu\n", pdata, *pdata );
 
             cksum += *pdata;
@@ -110,91 +135,79 @@ void pingPong(void *p) {
         }
         *pdata = cksum;
 
-        printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
+        printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
 
         /* if we're node 1, we kick things off */
         //errlogPrintf("Initial serve...\n");
         /* tell other system that new data is available */
-        rmIntSend(INT2, 2); /*Interrupt Int2 on Node 2 */
+        rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
     }
 
    while(1) {
       if (stop) epicsThreadSuspendSelf();
 
-      errlogPrintf("Waiting ... isrnode=%d",isrnode);
+      //errlogPrintf("Waiting ... isrnode=%d\n",isrnode);
       /* wait for interrupt */
       epicsEventMustWait(intFlag);
+      
+      /*reset pointer*/
+      pdata = psave; 
 
-      pdata = psave; /*reset pointer*/
-      //errlogPrintf("Got it!\n");
-      //errlogPrintf("Check Echo region at %p with = %lu\n\n", pData, *pData );
-      //
       /* wait another 2 seconds */
       epicsThreadSleep(2.0); 
       
-      /* increment RM data storage */
-
-      if(isrnode == 2) { //rx-side Node nodeId is 2 interrupting nodeId1
-        checkEcho();
-      }
+      checkEcho();
 
       cksum=0;
 
       for (i=0; i<_pEnd; i+=4)  {
-
-          *pdata = i;
+          *pdata = random_at_most(65535);
           cksum += *pdata;
-          if ( i<16 || i==sizeof(pdata)*(BLKLEN-2)) 
+          if ( i<16|| i== END) 
               printf("val[%p] = %lu\n", pdata, *pdata );
           pdata++;
       }
       *pdata = cksum;
 
-      printf("ending at %p with cksum val= %lu\n\n", pdata, *pdata );
+      printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
 
-      /* tell other system that new data is available */
-      if (isrnode == 1)
-          rmIntSend(INT2, 1);
-      else if (isrnode == 2)
-          rmIntSend(INT2, 2);
-      else
-        errlogPrintf("isrnode %d out of range\n", isrnode);
+      /* tell other system (isrnode) that new data is available */
+      rmIntSend(INT2, isrnode); /*isrnode is the caller that just interrupted us!*/
+
    }
 }
 
 void prep(int irq) {
-   static int rmConnected = 0;
-   long status =0;
+   long status;
 
-   if (!rmConnected) {
-       if ((status = rmIntConnect(irq, pingpongISR)) != OK) {
-           perror("rmIntConnect(INT2, pingpong)");
-           errlogPrintf("rmIntConnect fail with %ld. Pingpong task not started\n", status);
-       }
-       rmConnected = -1; /* Success. Store the state.*/
-   } else {
-      rmIntDisconnect(irq); 
-      rmConnected = 0; 
+   if ((status = rmIntConnect(irq, pingpongISR)) != OK) {
+       perror("rmIntConnect(INT2, pingpong)");
+       errlogPrintf("rmIntConnect fail with %ld. Pingpong task not started\n", status);
    }
+   printf("Prep finished\n");
+   prepared = 1;
 
 }
 
 void ppStart(void) {
 
-   if (!tid) {
-      tid = epicsThreadCreate("Ping Pong", 
-                               epicsThreadPriorityMedium,
-                               epicsThreadGetStackSize(epicsThreadStackMedium),
-                               pingPong,
-                               NULL);
+    if (!prepared)
+        prep(2);
 
-      intFlag = epicsEventMustCreate(epicsEventEmpty);
-   }
-   else if(epicsThreadIsSuspended(tid)) 
-      {
-         epicsThreadResume(tid);
-         stop = 0;
-      }
+    if (!tid) {
+        tid = epicsThreadCreate("Ping Pong", 
+                epicsThreadPriorityMedium,
+                epicsThreadGetStackSize(epicsThreadStackMedium),
+                pingPong,
+                NULL);
+
+        intFlag = epicsEventMustCreate(epicsEventEmpty);
+    }
+    else if(epicsThreadIsSuspended(tid)) 
+    {
+        epicsThreadResume(tid);
+        stop = 0;
+    }
 }
 static const iocshFuncDef ppStartFuncDef =
            {"ppStart", 0, NULL};
