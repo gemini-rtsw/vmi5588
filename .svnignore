@@ -1,0 +1,16 @@
+*.swp
+*BAK.adl
+cdCommands
+envPaths
+*.bak
+O.*
+db
+dbd
+bin
+data
+include
+lib
+.git
+edl
+html
+templates
