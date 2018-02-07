@@ -178,7 +178,7 @@ typedef struct {    /* VMIVME5588 Memory Map   */
 
 
 /* pointer to the VMI5588 memory structure */
-vmi5588_t volatile *prm;
+vmi5588_t volatile *prm = NULL;
 
 
 
@@ -202,6 +202,10 @@ long vmi5588_init(void)
     long            status;
     short           test;
     const char      vmi5588[] = "vmi5588";
+
+    printf("vmi5588_init\n");
+    /* Initialize only once */
+    if (prm != NULL) return OK;
 
     /* register the VMIVME5588 card in the A24 address space */
     status = devRegisterAddress(vmi5588, atVMEA24,  vmi5588_baseAddr,
@@ -483,6 +487,7 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
 * SEE ALSO: rmIntDisconnect(), rmIntSend()
 */
 
+#include <errlog.h>
 long rmIntConnect
 (
     int  irqNumber,            /* RM interrupt channel */
@@ -491,18 +496,29 @@ long rmIntConnect
 {
     long status;
 
-    if (prm == NULL)
-       return S_dev_NoInit;
-    if (irqNumber < 0 || irqNumber > 3)
-       return S_dev_vecInstlFail;
-    if (pisr[irqNumber] != NULL)
-       return S_dev_vectorInUse;
+    if (prm == NULL) {
+        errMessage(0, "rmIntConnect: prm NULL\n");
+        return S_dev_NoInit;
+    }
+    if (irqNumber < 0 || irqNumber > 3) {
+        errMessage(0, "rmIntConnect: irq range error\n");
+        return S_dev_vecInstlFail;
+    }
+    if (pisr[irqNumber] != NULL) {
+
+        errMessage(0, "rmIntConnect: pisr\n");
+        return S_dev_vectorInUse;
+    }
 
     /* plug in our wrapper routine */
     status = devConnectInterruptVME(vmi5588_intVec + irqNumber,
                                  vmi5588_intr, (void *)(long)irqNumber);
-    if (status != OK)
+    if (status != OK) {
+        errMessage(0, "rmIntConnect: devConnectInterruptVME failed\n");
        return status;
+    }
+
+    errlogSevPrintf(errlogInfo, "rmIntConnect: proutine = %s\n", (char *)proutine);
 
     /* save the routine pointer */
     pisr[irqNumber] = proutine;
@@ -924,11 +940,17 @@ void *rmPageMemBase(void)
 /* This must be called before iocinit() */
 int drvVmi5588Config(unsigned baseAddr, unsigned memSize, unsigned char intVec, unsigned char intLvl)
 {
-   vmi5588_baseAddr = baseAddr;
-   vmi5588_memSize  = memSize;
-   vmi5588_intVec   = intVec;
-   vmi5588_intLvl   = intLvl;
-   return 0;
+    long status =0;
+    vmi5588_baseAddr = baseAddr;
+    vmi5588_memSize  = memSize;
+    vmi5588_intVec   = intVec;
+    vmi5588_intLvl   = intLvl;
+
+    status = vmi5588_init();
+    if (status != OK) {
+        errMessage(0, "vme5588_init: Trouble initializing\n");
+    }
+    return 0;
 }
 
 static const iocshArg drvVmi5588Arg0 = {"baseAddr", iocshArgInt};
@@ -944,12 +966,23 @@ static void drvVmi5588ConfigCallFunc(const iocshArgBuf *args)
    drvVmi5588Config(args[0].ival, args[1].ival, (unsigned char)args[2].ival, (unsigned char)args[3].ival);
 }
 
+
+/*Export rmIntConnect to the shell*/
+static const iocshArg rmIntConnectArg0 = {"irqNumber", iocshArgInt};
+static const iocshArg rmIntConnectArg1 = {"routineName", iocshArgString};
+static const iocshArg *rmIntConnectArgs[] = {&rmIntConnectArg0, &rmIntConnectArg1};
+static const iocshFuncDef rmIntConnectFuncDef = { "rmIntConnect", 2, rmIntConnectArgs};
+
+static void rmIntConnectCallFunc(const iocshArgBuf *args) { 
+    rmIntConnect(args[0].ival, (void *)(char *)args[1].sval );
+}
+
 static void drvVmi5588RegisterCommands(void)
 {
   static int firstTime = 1;   
   if(firstTime) {
      iocshRegister(&drvVmi5588ConfigFuncDef, drvVmi5588ConfigCallFunc);
-
+     iocshRegister(&rmIntConnectFuncDef, rmIntConnectCallFunc);
      firstTime = 0;
    }
 }
