@@ -1,2 +1,4 @@
 registrar(ppStartRegisterCommands)
 variable(pingpongISR_count, int)
+variable(waittime, double)
+variable(_pEnd, int)

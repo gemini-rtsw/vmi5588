@@ -518,7 +518,7 @@ long rmIntConnect
        return status;
     }
 
-    errlogSevPrintf(errlogInfo, "rmIntConnect: proutine = %s\n", (char *)proutine);
+    errlogSevPrintf(errlogInfo, "rmIntConnect: proutine = %p\n", (char *)proutine);
 
     /* save the routine pointer */
     pisr[irqNumber] = proutine;
@@ -966,23 +966,11 @@ static void drvVmi5588ConfigCallFunc(const iocshArgBuf *args)
    drvVmi5588Config(args[0].ival, args[1].ival, (unsigned char)args[2].ival, (unsigned char)args[3].ival);
 }
 
-
-/*Export rmIntConnect to the shell*/
-static const iocshArg rmIntConnectArg0 = {"irqNumber", iocshArgInt};
-static const iocshArg rmIntConnectArg1 = {"routineName", iocshArgString};
-static const iocshArg *rmIntConnectArgs[] = {&rmIntConnectArg0, &rmIntConnectArg1};
-static const iocshFuncDef rmIntConnectFuncDef = { "rmIntConnect", 2, rmIntConnectArgs};
-
-static void rmIntConnectCallFunc(const iocshArgBuf *args) { 
-    rmIntConnect(args[0].ival, (void *)(char *)args[1].sval );
-}
-
 static void drvVmi5588RegisterCommands(void)
 {
   static int firstTime = 1;   
   if(firstTime) {
      iocshRegister(&drvVmi5588ConfigFuncDef, drvVmi5588ConfigCallFunc);
-     iocshRegister(&rmIntConnectFuncDef, rmIntConnectCallFunc);
      firstTime = 0;
    }
 }

@@ -16,7 +16,7 @@
 #define OK 0
 #define ERROR (-1)
 unsigned int pingpongISR_count = 0;
-epicsExportAddress(int, pingpongISR_count);
+double waittime = 2.0;
 int stop = 0;
 int isrnode = -1;
 int prepared = 0;
@@ -35,10 +35,10 @@ void pingpongISR(int node) {
 #define sixteenthMeg (oneK * 64)  /*64 k*/
 #define eighthMeg (oneK * 128)  /*128 k*/
 #define quarterMeg (oneK * BLKLEN) /*256 k*/
-#define _pEnd (eighthMeg - 1*WORDSIZE)
 #define END 128*WORDSIZE*BLKLEN-(3*WORDSIZE)
 
-enum machines {VME_0, VME_1, VME_2, CEM=1};
+enum machines {VME_0, VME_1, VME_2, CEM=129};
+int _pEnd = oneK;
 
 // Assumes 0 <= max <= RAND_MAX
 // Returns in the closed interval [0, max]
@@ -126,7 +126,8 @@ void pingPong(void *p) {
         cksum=0;
         for (i=0; i<_pEnd; i+=4)  {
 
-            *pdata = random_at_most(65535);
+            //*pdata = random_at_most(65535);
+            *pdata = i + 10;
             if ( i<16 || i==END) 
                 printf("val[%p] = %lu\n", pdata, *pdata );
 
@@ -154,14 +155,15 @@ void pingPong(void *p) {
       pdata = psave; 
 
       /* wait another 2 seconds */
-      epicsThreadSleep(2.0); 
+      epicsThreadSleep(waittime); 
       
       checkEcho();
 
       cksum=0;
 
       for (i=0; i<_pEnd; i+=4)  {
-          *pdata = random_at_most(65535);
+          //*pdata = random_at_most(65535);
+          *pdata = i + 10;
           cksum += *pdata;
           if ( i<16|| i== END) 
               printf("val[%p] = %lu\n", pdata, *pdata );
@@ -249,4 +251,8 @@ static void ppStartRegisterCommands(void)
    }
 }
 epicsExportRegistrar(ppStartRegisterCommands);
+epicsExportAddress(int, pingpongISR_count);
+epicsExportAddress(int, _pEnd);
+epicsExportAddress(double, waittime);
+
 
