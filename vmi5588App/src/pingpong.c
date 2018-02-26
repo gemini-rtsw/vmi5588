@@ -4,6 +4,7 @@
 #include <iocsh.h>
 #include <epicsExport.h>
 #include <epicsPrint.h>
+#include <math.h>
 #include <stdlib.h>
 
 
@@ -23,6 +24,22 @@ int prepared = 0;
 epicsEventId intFlag;
 epicsThreadId tid = 0;
 
+typedef struct
+{
+    long            checksum;
+    float           testfloat;
+    long            testlong;
+    float           testfloat2;
+    long            testlong2;
+    long            pad[251]; 
+}commandBlock;
+
+typedef struct
+{
+    commandBlock    page0;
+}memMap;
+
+
 /*******************************************************************/
 void pingpongISR(int node) {
    isrnode = node; 
@@ -37,8 +54,8 @@ void pingpongISR(int node) {
 #define quarterMeg (oneK * BLKLEN) /*256 k*/
 #define END 128*WORDSIZE*BLKLEN-(3*WORDSIZE)
 
-enum machines {VME_0, VME_1, VME_2, CEM=129};
-int _pEnd = oneK;
+enum machines {VME_0, VME_1, VME_2, CEM=1};
+int _pEnd = 4;
 
 // Assumes 0 <= max <= RAND_MAX
 // Returns in the closed interval [0, max]
@@ -69,17 +86,17 @@ void checkEcho(void) {
     volatile unsigned long *pEchoData;
 
     pdata = (volatile unsigned long*)rmPageMemBase();
-    pEchoData = pdata+(BLKLEN * 128); /*offset into next block to see echo area*/
+    pEchoData = pdata+(BLKLEN * 4); /*offset into next block to see echo area*/
     cksum=0;
 
-    for (i=0; i<_pEnd; i+=4)  {
+    for (i=0; i<_pEnd; i++)  {
         cksum += *pEchoData;
-        if ( i<16|| i== END) 
-            printf("echoval[%p] = %lu\n\n", pEchoData, *pEchoData );
+        if ( i<4|| i== END) 
+            errlogPrintf("echoval[%p] = %lu\n\n", pEchoData, *pEchoData );
         pEchoData++;
     }
 
-    printf("checkEcho ending at %p, cksum =%lu, received cksum val= %lu\n",
+    errlogPrintf("checkEcho ending at %p, cksum =%lu, received cksum val= %lu\n",
             pEchoData, cksum, *pEchoData );
 }
 
@@ -87,14 +104,14 @@ void checkEcho(void) {
 void clearMemory(volatile unsigned long *p) {
     int i;
 
-    printf("\n\nClearing all RM from %p to %p \n", p, p+(sizeof(p)*_pEnd) );
-    for (i=0; i<_pEnd+1; i+=4)  {
-        if(i<16)
-            printf("Clearing %p \n", p );
+    errlogPrintf("\n\nClearing all RM from %p to %p \n", p, p+(sizeof(p)*_pEnd) );
+    for (i=0; i<_pEnd+1; i++)  {
+        if(i<4)
+            errlogPrintf("Clearing %p \n", p );
        *(p++) = 0; 
     }
-    printf("Clear ending location -1 at %p with = %lu\n", p-1, *(p-1) );
-    printf("Clear ending location at %p with = %lu\n", p, *p );
+    errlogPrintf("Clear ending location -1 at %p with = %lu\n", p-1, *(p-1) );
+    errlogPrintf("Clear ending location at %p with = %lu\n", p, *p );
 }
 
 int firstpass = 1;
@@ -104,46 +121,86 @@ int firstpass = 1;
  *
  */
 void pingPong(void *p) {
-   unsigned char nodeId = rmNodeId();
-   volatile unsigned long *pdata = (volatile unsigned long*)rmPageMemBase();
-   volatile unsigned long *psave;
-   unsigned long i, cksum;
-   psave = pdata;
+//   unsigned char nodeId = rmNodeId();
+//   volatile unsigned long *pdata = (volatile unsigned long*)rmPageMemBase();
+//   float *ptest = (float *) (pdata+1);
+//   volatile unsigned long *psave;
+//   unsigned long i, cksum;
+//   float testfloat = M_PI;
 
-    if (firstpass) {
+   memMap *scsBase;
+   commandBlock *localPtr;
+   
+   scsBase = (memMap *) rmPageMemBase();
+   localPtr = (commandBlock *) &(scsBase->page0);
+
+   errlogPrintf("scsBase %p localPtr %p \n",scsBase, localPtr);
+   errlogPrintf("lp->testfloat  address: %p \n", &localPtr->testfloat);
+   errlogPrintf("lp->testlong   address: %p \n", &localPtr->testlong);
+   errlogPrintf("lp->testfloat2 address: %p \n", &localPtr->testfloat2);
+   errlogPrintf("lp->checksum   address: %p \n", &localPtr->checksum);
+
+
+   localPtr->testfloat =  M_PI;
+   localPtr->testlong  =  random_at_most(65535);
+   localPtr->testfloat2 =  M_PI + 10;
+   localPtr->testlong2  =  random_at_most(65535);
+   localPtr->checksum = localPtr->testfloat+
+                        localPtr->testlong +
+                        localPtr->testfloat2 +
+                        localPtr->testlong2;
+
+   errlogPrintf("testFloat %f, testLong = %ld\n", localPtr->testfloat, localPtr->testlong);
+   errlogPrintf("ending at with cksum val= %lu\n\n", localPtr->checksum );
+
+   rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
+
+  // psave = pdata;
+
+/*     if (firstpass) {
         firstpass = 0;
         clearMemory(pdata);
 
-        pdata = psave; /*reset pointer*/
-        printf("Check Echo region at %p with = %lu\n\n", pdata, *pdata );
-        printf("Check Echo region at %p with = %lu\n\n", pdata+2*BLKLEN-1, *(pdata + 2*BLKLEN-1) );
+        pdata = psave; 
+        errlogPrintf("Check Echo region at %p with = %lu\n\n", pdata, *pdata );
+        errlogPrintf("Check Echo region at %p with = %lu\n\n", pdata+2*BLKLEN-1, *(pdata + 2*BLKLEN-1) );
 
     }
-
+ */
     /*VME_0 VME_1 VME_2 and CEM*/
-    if(nodeId == VME_0 ) {
-        printf("starting at %p\n", pdata);
+/*     if(nodeId == VME_0 ) {
+        errlogPrintf("starting at %p\n", pdata);
         cksum=0;
-        for (i=0; i<_pEnd; i+=4)  {
-
-            //*pdata = random_at_most(65535);
-            *pdata = i + 10;
-            if ( i<16 || i==END) 
-                printf("val[%p] = %lu\n", pdata, *pdata );
-
+        for (i=0; i<_pEnd; i++)  {
+          if (i == 0){
+              *pdata = _pEnd;
+          }
+          else if (i==1) {
+              *ptest = testfloat;
+          }
+          else{
+              *pdata = random_at_most(65535);
+          }
+            //pdata = i + 10;
+            if ( i<4 || i==END){ 
+              if (i==1)
+              errlogPrintf("val[%p] = %f\n", ptest, *ptest );
+              else
+              errlogPrintf("val[%p] = %lu\n", pdata, *pdata );
+            }
             cksum += *pdata;
             pdata++;
         }
         *pdata = cksum;
 
-        printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
+        errlogPrintf("ending at %p with cksum val= %lu\n", pdata, *pdata );
 
-        /* if we're node 1, we kick things off */
+        // if we're node 1, we kick things off 
         //errlogPrintf("Initial serve...\n");
-        /* tell other system that new data is available */
-        rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
-    }
-
+        // tell other system that new data is available 
+        // rmIntSend(INT2, CEM); Interrupt Int2 on Node 2 which equals CEM or VME_2 
+    } */
+ 
    while(1) {
       if (stop) epicsThreadSuspendSelf();
 
@@ -152,30 +209,57 @@ void pingPong(void *p) {
       epicsEventMustWait(intFlag);
       
       /*reset pointer*/
-      pdata = psave; 
+//      pdata = psave; 
 
       /* wait another 2 seconds */
       epicsThreadSleep(waittime); 
       
-      checkEcho();
+   //   checkEcho();
 
-      cksum=0;
+   localPtr->testfloat =  M_PI;
+   localPtr->testlong  =  random_at_most(65535);
+   localPtr->testfloat2 =  M_PI + 10;
+   localPtr->testlong2  =  random_at_most(65535);
+   localPtr->checksum = localPtr->testfloat+localPtr->testlong+localPtr->testfloat2+localPtr->testlong2;
+   
+   errlogPrintf("testFloat %f testLong = %ld\n", localPtr->testfloat, localPtr->testlong);
+   errlogPrintf("testFloat2 %f testLong2 = %ld\n", localPtr->testfloat2, localPtr->testlong2);
+   errlogPrintf("ending at with cksum val= %lu\n", localPtr->checksum );
 
-      for (i=0; i<_pEnd; i+=4)  {
-          //*pdata = random_at_most(65535);
-          *pdata = i + 10;
+   rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
+
+
+/*       cksum=0;
+
+      for (i=0; i<_pEnd; i++)  {
+          if (i == 0){
+              *pdata = _pEnd;
+          }
+          else if (i==1) {
+              *ptest = testfloat;
+          }
+          else{
+              *pdata = random_at_most(65535);
+          }
           cksum += *pdata;
-          if ( i<16|| i== END) 
-              printf("val[%p] = %lu\n", pdata, *pdata );
+          if ( i<4|| i== END) { 
+              
+              if (i==1)
+              errlogPrintf("val[%p] = %f\n", ptest, *ptest );
+              else
+              errlogPrintf("val[%p] = %lu\n", pdata, *pdata );
+              
+          
+          }
+
           pdata++;
       }
       *pdata = cksum;
-
-      printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
+ */
+      //errlogPrintf("ending at %p with cksum val= %lu\n", pdata, *pdata );
 
       /* tell other system (isrnode) that new data is available */
-      rmIntSend(INT2, isrnode); /*isrnode is the caller that just interrupted us!*/
-
+      //rmIntSend(INT2, isrnode); /*isrnode is the caller that just interrupted us!*/
    }
 }
 
@@ -186,7 +270,7 @@ void prep(int irq) {
        perror("rmIntConnect(INT2, pingpong)");
        errlogPrintf("rmIntConnect fail with %ld. Pingpong task not started\n", status);
    }
-   printf("Prep finished\n");
+   errlogPrintf("Prep finished\n");
    prepared = 1;
 
 }
