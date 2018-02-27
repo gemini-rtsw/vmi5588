@@ -27,12 +27,12 @@ epicsThreadId tid = 0;
 
 typedef struct
 {
-    uint32_t     length;
-    float        testfloat;
-    uint32_t     testlong;
-    float        testfloat2;
-    uint32_t     checksum;
-    uint32_t     testlong2;
+    unsigned long     length;
+    float             testfloat;
+    long     testlong;
+    float             testfloat2;
+    long     checksum;
+    unsigned long     testlong2;
 }commandBlock;
 
 typedef struct
@@ -80,6 +80,27 @@ long random_at_most(long max) {
   return x/bin_size;
 }
 
+/* mrippa Feb. 2018. Use the random_at_most(long) routine
+ * above to return an signed long, possibly negative, number.
+ * 
+ * With 16-bits, a signed value is in the range [-32768, 32767].
+ * That is, [-(2^(16-1)), 2^(16-1)-1]. So, just get the random
+ * integer in the range [0, 65535], then always subtract the
+ * largest negative value which is 32768. Check the end cases:
+ *
+ * Case 1: Highest possible positive value.
+ *         The random_at_most(65535) actually returns 65535.
+ *         This case returns 65535 - 32768 = 32767.
+ *
+ * Case 2: Lowest possible value is negative.
+ *         The random_at_most(65535) actually returns 0.
+ *         This case returns 0 - 32768 = -32768.
+ *
+ */
+long random_maybe_negative(void) {
+    return (random_at_most(65537) - 32768);
+}
+
 void checkEcho(void) {
 
     unsigned long i, cksum;
@@ -116,6 +137,20 @@ void clearMemory(volatile unsigned long *p) {
 }
 
 int firstpass = 1;
+
+long checkSum_long (void *ptr, int numLongs)
+{
+    long *checkPtr = (long *) ptr;
+    long sum = 0;
+    int  n;
+
+    for (n = 0; n < numLongs; n++)
+    {
+        sum += *checkPtr++;
+    }
+
+    return (sum);
+}
 
 
 uint32_t checkSum (void *ptr, int numLongs)
@@ -165,21 +200,22 @@ void pingPong(void *p) {
 
        localPtr->length =  _pEnd;
        localPtr->testfloat =  M_PI;
-       localPtr->testlong  =  random_at_most(65535);
-       localPtr->testfloat2 =  M_PI + 10;
-       localPtr->testlong2  =  random_at_most(65535);
+       localPtr->testlong  =  random_maybe_negative(); 
+       localPtr->testfloat2 =  -M_PI + 10;
+       localPtr->testlong2  =  random_maybe_negative(); 
        //localPtr->checksum = localPtr->length  + localPtr->testfloat;
-       localPtr->checksum = checkSum((void *) &localPtr->length, _pEnd);
+       //localPtr->checksum = checkSum((void *) &localPtr->length, _pEnd);
+       localPtr->checksum = checkSum_long((void *) &localPtr->length, _pEnd);
 
        //localPtr->testlong   +
        //localPtr->testfloat2 +
        //localPtr->testlong2;
 
        errlogPrintf("testfloat %f\n", localPtr->testfloat);
-       errlogPrintf("testlong = %" PRIu32 "\n",  localPtr->testlong);
+       errlogPrintf("testlong = %ld\n",  localPtr->testlong);
        errlogPrintf("testfloat2 = %f\n",  localPtr->testfloat2);
        //errlogPrintf("testlong2 = %" PRIu32"\n",  localPtr->testlong2);
-       errlogPrintf("ending at with cksum val= %" PRIu32 "\n\n", localPtr->checksum );
+       errlogPrintf("ending at with cksum val= %ld\n\n", localPtr->checksum );
 
        rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
 
