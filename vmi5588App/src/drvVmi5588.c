@@ -116,7 +116,7 @@ long            vmi5588_report();
 long            vmi5588_init();
 
 /* Local forward references */
-LOCAL void      vmi5588_reboot(void *p);
+/* void      vmi5588_reboot(void *p);  */
 
 /* Driver support DRVET */
 struct {
@@ -165,6 +165,12 @@ typedef struct {    /* VMIVME5588 Memory Map   */
        char              pad5[3];       /* unused    */
        unsigned char     number;        /* VRn       */
     } vector[4];                     /* for n=0 to 3  */
+    
+    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+/* 
+   06Mar2018 - RRO/MRI:
+   Previous lines commmented out until Gemini WFS's are ported to RTEMS  
+*/
 
     /* the following needs to be tweaked if we ever want to use more than 256 kB */
     /* Below here the card is just reflected RAM */
@@ -173,7 +179,7 @@ typedef struct {    /* VMIVME5588 Memory Map   */
     short       pageFlag[RM_NUM_PAGE]; /* 0x100 thru 0x2FD - Update flags  */
     short        pad7[256-RM_NUM_PAGE]; /* 0x2FD thru 0x2FF */
     char         pad8[0x100];           /* 0x300 thru 0x3FF */
-    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+/*    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE]; */  /* data storage */
 } vmi5588_t;
 
 
@@ -370,14 +376,15 @@ long vmi5588_report (int level)
 * NOMANUAL
 */
 
-LOCAL void vmi5588_reboot (void *p)
+//LOCAL void vmi5588_reboot (void *p)
+void vmi5588_reboot (void *p)
 {
     int             i;
 
     for (i = 0; i <= 3; i++)
        prm->interrupt[i].control &= ~RM_CR_INT_ENABLE;
     epicsPrintf("vmi5588_reboot(): Interrupts disabled.\n");
-    epicsThreadSleep(1.0); 
+    /* epicsThreadSleep(1.0); */ 
 
 }
 

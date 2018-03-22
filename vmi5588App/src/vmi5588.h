@@ -104,7 +104,7 @@ long   rmIntSend(int irqNumber, int nodeId);
 long   rmNodeId(void);
 unsigned long   rmStatus(long reset);
 void * rmPageMemBase(void);
-
+void   vmi5588_reboot(void *p);
 
 /* Routines for use within device support only */
 long vmi5588_pageInit(short rmPage);
