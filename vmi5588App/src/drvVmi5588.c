@@ -166,7 +166,7 @@ typedef struct {    /* VMIVME5588 Memory Map   */
        unsigned char     number;        /* VRn       */
     } vector[4];                     /* for n=0 to 3  */
     
-    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+   /* unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
 /* 
    06Mar2018 - RRO/MRI:
    Previous lines commmented out until Gemini WFS's are ported to RTEMS  
@@ -628,6 +628,7 @@ long rmIntSend
     else
     /* Node specific */
     prm->cmd_Node = irqNumber << 8 | (nodeId & 0xff);
+   (*intrCnts[0])++;
 
     return OK;
 }
@@ -770,18 +771,18 @@ void vmi5588_pageISR
 {
     short i;
 
-#ifdef RM_DEBUG
-    errlogPrintf("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId);
-#endif
+/*#ifdef RM_DEBUG*/
+    /*errlogPrintf("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId);*/
+/*#endif*/
 
     /* check for new data in page */
     for (i = 0; i < pageIo.number; i++)
        if (prm->pageFlag[pageIo.p[i].page] != pageIo.p[i].lastPageFlag) {
            pageIo.p[i].lastPageFlag = prm->pageFlag[pageIo.p[i].page];
 
-#ifdef RM_DEBUG
-           errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);
-#endif
+/*#ifdef RM_DEBUG*/
+           /*errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);*/
+/*#endif*/
 
            scanIoRequest(pageIo.p[i].ioscanpvt);
        }

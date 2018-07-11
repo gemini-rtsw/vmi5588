@@ -64,7 +64,7 @@ Gemini EPICS
 #define RM_TYPE_USER 0x10
 
 #define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
-#define RM_NUM_PAGE  255    /* max number of pages (for 256 kB board) */
+#define RM_NUM_PAGE  254    /* max number of pages (for 256 kB board) */
 
 #define RM_MAX_ATTEMPTS 10
 
