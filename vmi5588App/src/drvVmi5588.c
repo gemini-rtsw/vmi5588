@@ -166,7 +166,7 @@ typedef struct {    /* VMIVME5588 Memory Map   */
        unsigned char     number;        /* VRn       */
     } vector[4];                     /* for n=0 to 3  */
     
-   /* unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
 /* 
    06Mar2018 - RRO/MRI:
    Previous lines commmented out until Gemini WFS's are ported to RTEMS  
