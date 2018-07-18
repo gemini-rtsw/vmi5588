@@ -115,9 +115,6 @@ static unsigned char vmi5588_intLvl   = RM_INT_LEVEL;
 long            vmi5588_report();
 long            vmi5588_init();
 
-/* Local forward references */
-/* void      vmi5588_reboot(void *p);  */
-
 /* Driver support DRVET */
 struct {
     long            number;
@@ -131,9 +128,8 @@ struct {
 epicsExportAddress(drvet, drvVmi5588);
 
 /* Array of interrupt service routine pointers */
-LOCAL void (*pisr[4])(int); 
+static void (*pisr[4])(int); 
 
-/* LOCAL SYMTAB_ID rmSymTbl; */   /* was  this ever used? */
 int rmMaxAttempts;      /* what was this for?  Doesn't seem to be used anywhere */
 
 struct {
@@ -179,7 +175,6 @@ typedef struct {    /* VMIVME5588 Memory Map   */
     short       pageFlag[RM_NUM_PAGE]; /* 0x100 thru 0x2FD - Update flags  */
     short        pad7[256-RM_NUM_PAGE]; /* 0x2FD thru 0x2FF */
     char         pad8[0x100];           /* 0x300 thru 0x3FF */
-/*    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE]; */  /* data storage */
 } vmi5588_t;
 
 
@@ -376,10 +371,9 @@ long vmi5588_report (int level)
 * NOMANUAL
 */
 
-//LOCAL void vmi5588_reboot (void *p)
 void vmi5588_reboot (void *p)
 {
-    int             i;
+    int  i;
 
     for (i = 0; i <= 3; i++)
        prm->interrupt[i].control &= ~RM_CR_INT_ENABLE;
@@ -400,26 +394,26 @@ void vmi5588_reboot (void *p)
 *
 * NOMANUAL
 */
-int intr0cnt = 0;
-epicsExportAddress (int, intr0cnt);
-int intr1cnt = 0;
-epicsExportAddress (int, intr1cnt);
-int intr2cnt = 0;
-epicsExportAddress (int, intr2cnt);
-int intr3cnt = 0;
-epicsExportAddress (int, intr3cnt);
+int vmic5588int0cnt = 0;
+epicsExportAddress (int, vmic5588int0cnt);
+int vmic5588int1cnt = 0;
+epicsExportAddress (int, vmic5588int1cnt);
+int vmic5588int2cnt = 0;
+epicsExportAddress (int, vmic5588int2cnt);
+int vmic5588int3cnt = 0;
+epicsExportAddress (int, vmic5588int3cnt);
 
-int latestIrqNum;
-epicsExportAddress(int, latestIrqNum);
+int vmic5588latestIrqNum;
+epicsExportAddress(int, vmic5588latestIrqNum);
 
-int volatile *intrCnts[] = {&intr0cnt, &intr1cnt, &intr2cnt, &intr3cnt};
+int volatile *vmic5588intCnts[] = {&vmic5588int0cnt, &vmic5588int1cnt, &vmic5588int2cnt, &vmic5588int3cnt};
 
 void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this interrupt */
 {
    int key = epicsInterruptLock();
    int  irqNumber = (int)(long)p;   /* RM interrupt channel number */
 
-   latestIrqNum = irqNumber;
+   vmic5588latestIrqNum = irqNumber;
 
 
    if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
@@ -454,7 +448,7 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
 
 
    /* finally, tally the interrupt */
-   (*intrCnts[irqNumber])++;
+   (*vmic5588intCnts[irqNumber])++;
    epicsInterruptUnlock(key);
 }
 
@@ -628,7 +622,6 @@ long rmIntSend
     else
     /* Node specific */
     prm->cmd_Node = irqNumber << 8 | (nodeId & 0xff);
-   (*intrCnts[0])++;
 
     return OK;
 }
@@ -771,18 +764,18 @@ void vmi5588_pageISR
 {
     short i;
 
-/*#ifdef RM_DEBUG*/
-    /*errlogPrintf("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId);*/
-/*#endif*/
+#ifdef RM_DEBUG
+    errlogPrintf("Interrupt: vmi5588_pageISR, from Node <%x>\n", rmNodeId);
+#endif
 
     /* check for new data in page */
     for (i = 0; i < pageIo.number; i++)
        if (prm->pageFlag[pageIo.p[i].page] != pageIo.p[i].lastPageFlag) {
            pageIo.p[i].lastPageFlag = prm->pageFlag[pageIo.p[i].page];
 
-/*#ifdef RM_DEBUG*/
-           /*errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);*/
-/*#endif*/
+#ifdef RM_DEBUG
+           errlogPrintf("Triggering page <%d>\n", pageIo.p[i].page);
+#endif
 
            scanIoRequest(pageIo.p[i].ioscanpvt);
        }
