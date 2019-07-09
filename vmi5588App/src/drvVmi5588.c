@@ -115,9 +115,6 @@ static unsigned char vmi5588_intLvl   = RM_INT_LEVEL;
 long            vmi5588_report();
 long            vmi5588_init();
 
-/* Local forward references */
-LOCAL void      vmi5588_reboot(void *p);
-
 /* Driver support DRVET */
 struct {
     long            number;
@@ -131,9 +128,8 @@ struct {
 epicsExportAddress(drvet, drvVmi5588);
 
 /* Array of interrupt service routine pointers */
-LOCAL void (*pisr[4])(int); 
+static void (*pisr[4])(int); 
 
-/* LOCAL SYMTAB_ID rmSymTbl; */   /* was  this ever used? */
 int rmMaxAttempts;      /* what was this for?  Doesn't seem to be used anywhere */
 
 struct {
@@ -165,6 +161,12 @@ typedef struct {    /* VMIVME5588 Memory Map   */
        char              pad5[3];       /* unused    */
        unsigned char     number;        /* VRn       */
     } vector[4];                     /* for n=0 to 3  */
+    
+    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
+/* 
+   06Mar2018 - RRO/MRI:
+   Previous lines commmented out until Gemini WFS's are ported to RTEMS  
+*/
 
     /* the following needs to be tweaked if we ever want to use more than 256 kB */
     /* Below here the card is just reflected RAM */
@@ -173,12 +175,11 @@ typedef struct {    /* VMIVME5588 Memory Map   */
     short       pageFlag[RM_NUM_PAGE]; /* 0x100 thru 0x2FD - Update flags  */
     short        pad7[256-RM_NUM_PAGE]; /* 0x2FD thru 0x2FF */
     char         pad8[0x100];           /* 0x300 thru 0x3FF */
-    unsigned char        mem[RM_NUM_PAGE*RM_PAGE_SIZE];  /* data storage */
 } vmi5588_t;
 
 
 /* pointer to the VMI5588 memory structure */
-vmi5588_t volatile *prm;
+vmi5588_t volatile *prm = NULL;
 
 
 
@@ -202,6 +203,10 @@ long vmi5588_init(void)
     long            status;
     short           test;
     const char      vmi5588[] = "vmi5588";
+
+    printf("vmi5588_init\n");
+    /* Initialize only once */
+    if (prm != NULL) return OK;
 
     /* register the VMIVME5588 card in the A24 address space */
     status = devRegisterAddress(vmi5588, atVMEA24,  vmi5588_baseAddr,
@@ -366,14 +371,14 @@ long vmi5588_report (int level)
 * NOMANUAL
 */
 
-LOCAL void vmi5588_reboot (void *p)
+void vmi5588_reboot (void *p)
 {
-    int             i;
+    int  i;
 
     for (i = 0; i <= 3; i++)
        prm->interrupt[i].control &= ~RM_CR_INT_ENABLE;
     epicsPrintf("vmi5588_reboot(): Interrupts disabled.\n");
-    epicsThreadSleep(1.0); 
+    /* epicsThreadSleep(1.0); */ 
 
 }
 
@@ -389,26 +394,26 @@ LOCAL void vmi5588_reboot (void *p)
 *
 * NOMANUAL
 */
-int intr0cnt = 0;
-epicsExportAddress (int, intr0cnt);
-int intr1cnt = 0;
-epicsExportAddress (int, intr1cnt);
-int intr2cnt = 0;
-epicsExportAddress (int, intr2cnt);
-int intr3cnt = 0;
-epicsExportAddress (int, intr3cnt);
+int vmic5588int0cnt = 0;
+epicsExportAddress (int, vmic5588int0cnt);
+int vmic5588int1cnt = 0;
+epicsExportAddress (int, vmic5588int1cnt);
+int vmic5588int2cnt = 0;
+epicsExportAddress (int, vmic5588int2cnt);
+int vmic5588int3cnt = 0;
+epicsExportAddress (int, vmic5588int3cnt);
 
-int latestIrqNum;
-epicsExportAddress(int, latestIrqNum);
+int vmic5588latestIrqNum;
+epicsExportAddress(int, vmic5588latestIrqNum);
 
-int volatile *intrCnts[] = {&intr0cnt, &intr1cnt, &intr2cnt, &intr3cnt};
+int volatile *vmic5588intCnts[] = {&vmic5588int0cnt, &vmic5588int1cnt, &vmic5588int2cnt, &vmic5588int3cnt};
 
 void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this interrupt */
 {
    int key = epicsInterruptLock();
    int  irqNumber = (int)(long)p;   /* RM interrupt channel number */
 
-   latestIrqNum = irqNumber;
+   vmic5588latestIrqNum = irqNumber;
 
 
    if (prm == NULL || irqNumber < 0 || irqNumber > 3) {
@@ -443,7 +448,7 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
 
 
    /* finally, tally the interrupt */
-   (*intrCnts[irqNumber])++;
+   (*vmic5588intCnts[irqNumber])++;
    epicsInterruptUnlock(key);
 }
 
@@ -483,6 +488,7 @@ void vmi5588_intr(void *p)    /* parameter p is the irq number that caused this 
 * SEE ALSO: rmIntDisconnect(), rmIntSend()
 */
 
+#include <errlog.h>
 long rmIntConnect
 (
     int  irqNumber,            /* RM interrupt channel */
@@ -491,18 +497,29 @@ long rmIntConnect
 {
     long status;
 
-    if (prm == NULL)
-       return S_dev_NoInit;
-    if (irqNumber < 0 || irqNumber > 3)
-       return S_dev_vecInstlFail;
-    if (pisr[irqNumber] != NULL)
-       return S_dev_vectorInUse;
+    if (prm == NULL) {
+        errMessage(0, "rmIntConnect: prm NULL\n");
+        return S_dev_NoInit;
+    }
+    if (irqNumber < 0 || irqNumber > 3) {
+        errMessage(0, "rmIntConnect: irq range error\n");
+        return S_dev_vecInstlFail;
+    }
+    if (pisr[irqNumber] != NULL) {
+
+        errMessage(0, "rmIntConnect: pisr\n");
+        return S_dev_vectorInUse;
+    }
 
     /* plug in our wrapper routine */
     status = devConnectInterruptVME(vmi5588_intVec + irqNumber,
                                  vmi5588_intr, (void *)(long)irqNumber);
-    if (status != OK)
+    if (status != OK) {
+        errMessage(0, "rmIntConnect: devConnectInterruptVME failed\n");
        return status;
+    }
+
+    errlogSevPrintf(errlogInfo, "rmIntConnect: proutine = %p\n", (char *)proutine);
 
     /* save the routine pointer */
     pisr[irqNumber] = proutine;
@@ -924,11 +941,17 @@ void *rmPageMemBase(void)
 /* This must be called before iocinit() */
 int drvVmi5588Config(unsigned baseAddr, unsigned memSize, unsigned char intVec, unsigned char intLvl)
 {
-   vmi5588_baseAddr = baseAddr;
-   vmi5588_memSize  = memSize;
-   vmi5588_intVec   = intVec;
-   vmi5588_intLvl   = intLvl;
-   return 0;
+    long status =0;
+    vmi5588_baseAddr = baseAddr;
+    vmi5588_memSize  = memSize;
+    vmi5588_intVec   = intVec;
+    vmi5588_intLvl   = intLvl;
+
+    status = vmi5588_init();
+    if (status != OK) {
+        errMessage(0, "vme5588_init: Trouble initializing\n");
+    }
+    return 0;
 }
 
 static const iocshArg drvVmi5588Arg0 = {"baseAddr", iocshArgInt};
@@ -949,7 +972,6 @@ static void drvVmi5588RegisterCommands(void)
   static int firstTime = 1;   
   if(firstTime) {
      iocshRegister(&drvVmi5588ConfigFuncDef, drvVmi5588ConfigCallFunc);
-
      firstTime = 0;
    }
 }

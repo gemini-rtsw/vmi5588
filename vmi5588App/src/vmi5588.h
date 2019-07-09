@@ -64,7 +64,7 @@ Gemini EPICS
 #define RM_TYPE_USER 0x10
 
 #define RM_PAGE_SIZE 0x0400 /* 1024 bytes per page */
-#define RM_NUM_PAGE  255    /* max number of pages (for 256 kB board) */
+#define RM_NUM_PAGE  254    /* max number of pages (for 256 kB board) */
 
 #define RM_MAX_ATTEMPTS 10
 
@@ -104,7 +104,7 @@ long   rmIntSend(int irqNumber, int nodeId);
 long   rmNodeId(void);
 unsigned long   rmStatus(long reset);
 void * rmPageMemBase(void);
-
+void   vmi5588_reboot(void *p);
 
 /* Routines for use within device support only */
 long vmi5588_pageInit(short rmPage);

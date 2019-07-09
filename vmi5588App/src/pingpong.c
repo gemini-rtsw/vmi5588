@@ -4,6 +4,8 @@
 #include <iocsh.h>
 #include <epicsExport.h>
 #include <epicsPrint.h>
+#include <inttypes.h>
+#include <math.h>
 #include <stdlib.h>
 
 
@@ -16,12 +18,31 @@
 #define OK 0
 #define ERROR (-1)
 unsigned int pingpongISR_count = 0;
-epicsExportAddress(int, pingpongISR_count);
+double waittime = 2.0;
 int stop = 0;
 int isrnode = -1;
 int prepared = 0;
 epicsEventId intFlag;
 epicsThreadId tid = 0;
+
+typedef struct
+{
+    unsigned long     length;       //0
+    float             testfloat;    //1
+    long              testlong;     //2
+    float             testfloat2;   //3
+    unsigned long     testlong2;    //4
+    long              checksum;     //5
+    unsigned long     pad[250];
+}commandBlock;
+
+typedef struct
+{
+    commandBlock    page0;
+    commandBlock    echoBlock;
+}memMap;
+
+memMap *scsBase;
 
 /*******************************************************************/
 void pingpongISR(int node) {
@@ -35,10 +56,40 @@ void pingpongISR(int node) {
 #define sixteenthMeg (oneK * 64)  /*64 k*/
 #define eighthMeg (oneK * 128)  /*128 k*/
 #define quarterMeg (oneK * BLKLEN) /*256 k*/
-#define _pEnd (eighthMeg - 1*WORDSIZE)
 #define END 128*WORDSIZE*BLKLEN-(3*WORDSIZE)
 
 enum machines {VME_0, VME_1, VME_2, CEM=1};
+int _pEnd = 5;
+
+long checkSum_long (void *ptr, int numLongs)
+{
+    long *checkPtr = (long *) ptr;
+    long sum = 0;
+    int  n;
+
+    for (n = 0; n < numLongs; n++)
+    {
+        sum += *checkPtr++;
+    }
+
+    return (sum);
+}
+
+
+uint32_t checkSum (void *ptr, int numLongs)
+{
+    uint32_t   *checkPtr = (uint32_t *) ptr;
+    uint32_t sum = 0;
+    int     n;
+
+    for (n = 0; n < numLongs; n++)
+    {
+        sum += *checkPtr++;
+    }
+
+    return (sum);
+}
+
 
 // Assumes 0 <= max <= RAND_MAX
 // Returns in the closed interval [0, max]
@@ -62,39 +113,70 @@ long random_at_most(long max) {
   return x/bin_size;
 }
 
+/* mrippa Feb. 2018. Use the random_at_most(long) routine
+ * above to return an signed long, possibly negative, number.
+ * 
+ * With 16-bits, a signed value is in the range [-32768, 32767].
+ * That is, [-(2^(16-1)), 2^(16-1)-1]. So, just get the random
+ * integer in the range [0, 65535], then always subtract the
+ * largest negative value which is 32768. Check the end cases:
+ *
+ * Case 1: Highest possible positive value.
+ *         The random_at_most(65535) actually returns 65535.
+ *         This case returns 65535 - 32768 = 32767.
+ *
+ * Case 2: Lowest possible value is negative.
+ *         The random_at_most(65535) actually returns 0.
+ *         This case returns 0 - 32768 = -32768.
+ *
+ */
+long random_maybe_negative(void) {
+    return (random_at_most(65537) - 32768);
+}
+
 void checkEcho(void) {
 
-    unsigned long i, cksum;
-    volatile unsigned long *pdata;
-    volatile unsigned long *pEchoData;
+    long localcksum = 0;
+    static int first_time = 1;
+    //volatile unsigned long *pdata;
+    //volatile unsigned long *pEchoData;
+    commandBlock *localPtr, *saveptr;
+    localPtr = (commandBlock *) &(scsBase->echoBlock);
+    saveptr = localPtr;
 
-    pdata = (volatile unsigned long*)rmPageMemBase();
-    pEchoData = pdata+(BLKLEN * 128); /*offset into next block to see echo area*/
-    cksum=0;
-
-    for (i=0; i<_pEnd; i+=4)  {
-        cksum += *pEchoData;
-        if ( i<16|| i== END) 
-            printf("echoval[%p] = %lu\n\n", pEchoData, *pEchoData );
-        pEchoData++;
+    if (first_time) {
+        errlogPrintf("ECHO: localPtr %p, echoBlock %p\n", localPtr, localPtr);
+        first_time = 0;
     }
 
-    printf("checkEcho ending at %p, cksum =%lu, received cksum val= %lu\n",
-            pEchoData, cksum, *pEchoData );
+    //pdata = (volatile unsigned long*)rmPageMemBase();
+    //pEchoData = pdata+(BLKLEN * 4); /*offset into next block to see echo area*/
+    //cksum = checkSum_long( (void *) &pEchoData, _pEnd);
+
+    errlogPrintf("echoval[%p] = ulong_length = %lu\n", (unsigned long *)&localPtr->length, localPtr->length );
+    errlogPrintf("echoval[%p] = float_testfloat = %f\n",(unsigned long *) &localPtr->testfloat, localPtr->testfloat );
+    errlogPrintf("echoval[%p] = long_testlong = %ld\n",(unsigned long *) &localPtr->testlong, localPtr->testlong );
+    errlogPrintf("echoval[%p] = float_testfloat2 = %f\n",(unsigned long *) &localPtr->testfloat2, localPtr->testfloat2 );
+    errlogPrintf("echoval[%p] = uLong_testlong2 = %lu\n",(unsigned long *) &localPtr->testlong2, localPtr->testlong2 );
+    localcksum = checkSum_long((void *) &localPtr->length, _pEnd);
+    //localPtr = saveptr;
+
+    errlogPrintf("checkEcho ending at %p, localcksum =%ld, Rx_cksum val= %ld\n", localPtr, localcksum, localPtr->checksum);
+    errlogPrintf("------\n");
 }
 
 
 void clearMemory(volatile unsigned long *p) {
     int i;
 
-    printf("\n\nClearing all RM from %p to %p \n", p, p+(sizeof(p)*_pEnd) );
-    for (i=0; i<_pEnd+1; i+=4)  {
-        if(i<16)
-            printf("Clearing %p \n", p );
+    errlogPrintf("\n\nClearing all RM from %p to %p \n", p, p+(sizeof(p)*_pEnd) );
+    for (i=0; i<_pEnd+1; i++)  {
+        if(i<4)
+            errlogPrintf("Clearing %p \n", p );
        *(p++) = 0; 
     }
-    printf("Clear ending location -1 at %p with = %lu\n", p-1, *(p-1) );
-    printf("Clear ending location at %p with = %lu\n", p, *p );
+    errlogPrintf("Clear ending location -1 at %p with = %lu\n", p-1, *(p-1) );
+    errlogPrintf("Clear ending location at %p with = %lu\n", p, *p );
 }
 
 int firstpass = 1;
@@ -104,76 +186,93 @@ int firstpass = 1;
  *
  */
 void pingPong(void *p) {
-   unsigned char nodeId = rmNodeId();
-   volatile unsigned long *pdata = (volatile unsigned long*)rmPageMemBase();
-   volatile unsigned long *psave;
-   unsigned long i, cksum;
-   psave = pdata;
+//   unsigned char nodeId = rmNodeId();
+//   volatile unsigned long *pdata = (volatile unsigned long*)rmPageMemBase();
+//   float *ptest = (float *) (pdata+1);
+//   volatile unsigned long *psave;
+//   unsigned long i, cksum;
+//   float testfloat = M_PI;
 
-    if (firstpass) {
-        firstpass = 0;
-        clearMemory(pdata);
+   if (scsBase == NULL) {
+        errlogSevPrintf(errlogFatal, "Failed to map scsBase to rmPageMemBase. Did you run Prep() ?\n");
 
-        pdata = psave; /*reset pointer*/
-        printf("Check Echo region at %p with = %lu\n\n", pdata, *pdata );
-        printf("Check Echo region at %p with = %lu\n\n", pdata+2*BLKLEN-1, *(pdata + 2*BLKLEN-1) );
+        return;
+   }
 
-    }
+   commandBlock *localPtr, *localPtr2;
+   localPtr = (commandBlock *) &(scsBase->page0);
+   localPtr2 = (commandBlock *) &(scsBase->echoBlock);
 
-    /*VME_0 VME_1 VME_2 and CEM*/
-    if(nodeId == VME_0 ) {
-        printf("starting at %p\n", pdata);
-        cksum=0;
-        for (i=0; i<_pEnd; i+=4)  {
+   errlogPrintf("scsBase %p page0 %p, echoBlock %p\n",scsBase, localPtr, localPtr2);
+   errlogPrintf("sizeof(commandBlock) = %zu\n",sizeof(commandBlock) );
 
-            *pdata = random_at_most(65535);
-            if ( i<16 || i==END) 
-                printf("val[%p] = %lu\n", pdata, *pdata );
+   rmIntSend(INT2, CEM); //Interrupt Int2 on Node 2 which equals CEM or VME_2 
+ 
+   while(1) {
+       if (stop) {
+           epicsThreadSuspendSelf();
+           stop = 0;
+       }
 
-            cksum += *pdata;
-            pdata++;
+       /* wait for interrupt */
+       epicsEventMustWait(intFlag);
+
+       /* wait another delay to slowthings */
+       epicsThreadSleep(waittime); 
+       checkEcho();
+
+       localPtr->length =  _pEnd;
+       localPtr->testfloat =  M_PI + random_maybe_negative(); 
+       localPtr->testlong  =  random_maybe_negative(); 
+       localPtr->testfloat2 = -M_PI + 1;
+       localPtr->testlong2  = random_maybe_negative(); 
+       //localPtr->checksum = localPtr->length  + localPtr->testfloat;
+       //localPtr->checksum = checkSum((void *) &localPtr->length, _pEnd);
+       localPtr->checksum = checkSum_long((void *) &localPtr->length, _pEnd);
+
+       //localPtr->testlong   +
+       //localPtr->testfloat2 +
+       //localPtr->testlong2;
+
+       errlogPrintf("testfloat %f\n", localPtr->testfloat);
+       errlogPrintf("testlong = %ld\n",  localPtr->testlong);
+       errlogPrintf("testfloat2 = %f\n",  localPtr->testfloat2);
+       errlogPrintf("testlong2 = %lu\n",  localPtr->testlong2);
+       errlogPrintf("ending at %p with cksum val= %ld\n\n", &localPtr->checksum, localPtr->checksum );
+
+       rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
+
+       /*       cksum=0;
+
+                for (i=0; i<_pEnd; i++)  {
+                if (i == 0){
+        *pdata = _pEnd;
+        }
+        else if (i==1) {
+        *ptest = testfloat;
+        }
+        else{
+        *pdata = random_at_most(65535);
+        }
+        cksum += *pdata;
+        if ( i<4|| i== END) { 
+
+        if (i==1)
+        errlogPrintf("val[%p] = %f\n", ptest, *ptest );
+        else
+        errlogPrintf("val[%p] = %lu\n", pdata, *pdata );
+
+
+        }
+
+        pdata++;
         }
         *pdata = cksum;
+        */
+       //errlogPrintf("ending at %p with cksum val= %lu\n", pdata, *pdata );
 
-        printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
-
-        /* if we're node 1, we kick things off */
-        //errlogPrintf("Initial serve...\n");
-        /* tell other system that new data is available */
-        rmIntSend(INT2, CEM); /*Interrupt Int2 on Node 2 which equals CEM or VME_2 */
-    }
-
-   while(1) {
-      if (stop) epicsThreadSuspendSelf();
-
-      //errlogPrintf("Waiting ... isrnode=%d\n",isrnode);
-      /* wait for interrupt */
-      epicsEventMustWait(intFlag);
-      
-      /*reset pointer*/
-      pdata = psave; 
-
-      /* wait another 2 seconds */
-      epicsThreadSleep(2.0); 
-      
-      checkEcho();
-
-      cksum=0;
-
-      for (i=0; i<_pEnd; i+=4)  {
-          *pdata = random_at_most(65535);
-          cksum += *pdata;
-          if ( i<16|| i== END) 
-              printf("val[%p] = %lu\n", pdata, *pdata );
-          pdata++;
-      }
-      *pdata = cksum;
-
-      printf("ending at %p with cksum val= %lu\n", pdata, *pdata );
-
-      /* tell other system (isrnode) that new data is available */
-      rmIntSend(INT2, isrnode); /*isrnode is the caller that just interrupted us!*/
-
+       /* tell other system (isrnode) that new data is available */
+       //rmIntSend(INT2, isrnode); /*isrnode is the caller that just interrupted us!*/
    }
 }
 
@@ -184,7 +283,10 @@ void prep(int irq) {
        perror("rmIntConnect(INT2, pingpong)");
        errlogPrintf("rmIntConnect fail with %ld. Pingpong task not started\n", status);
    }
-   printf("Prep finished\n");
+   errlogPrintf("Prep finished\n");
+
+   scsBase = (memMap *) rmPageMemBase();
+
    prepared = 1;
 
 }
@@ -205,6 +307,7 @@ void ppStart(void) {
     }
     else if(epicsThreadIsSuspended(tid)) 
     {
+        errlogPrintf("Trying to resume tid ...\n");
         epicsThreadResume(tid);
         stop = 0;
     }
@@ -217,18 +320,26 @@ static void ppStartCallFunc(const iocshArgBuf *args)
    ppStart();
 }
 
+void ppResume(void) {
+    epicsThreadResume(tid);
+}
+
 void ppStop(void)
 {
    stop = 1;
 }
-static const iocshFuncDef ppStopFuncDef =
-           {"ppStop", 0, NULL};
 
+static const iocshFuncDef ppStopFuncDef = {"ppStop", 0, NULL};
 static void ppStopCallFunc(const iocshArgBuf *args)
 {
    ppStop();
 }
 
+//static const iocshFuncDef ppResumeFuncDef = {"ppResume", 0, NULL};
+//static void ppResumeCallFunc(const iocshArgBuf *args)
+//{
+//   ppResume();
+//}
 static const iocshArg prepArg0 = {"irq", iocshArgInt};
 static const iocshArg *prepArgs[] = {&prepArg0};
 static const iocshFuncDef prepFuncDef = {"prep", 1, prepArgs};       
@@ -244,9 +355,14 @@ static void ppStartRegisterCommands(void)
    if (firstTime) {
       iocshRegister(&ppStartFuncDef, ppStartCallFunc);
       iocshRegister(&ppStopFuncDef,  ppStopCallFunc);
+      //iocshRegister(&ppResumeFuncDef,  ppResumeCallFunc);
       iocshRegister(&prepFuncDef,    prepCallFunc);
       firstTime = 0;
    }
 }
 epicsExportRegistrar(ppStartRegisterCommands);
+epicsExportAddress(int, pingpongISR_count);
+epicsExportAddress(int, _pEnd);
+epicsExportAddress(double, waittime);
+
 
