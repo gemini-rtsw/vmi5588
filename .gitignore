@@ -14,3 +14,5 @@ lib
 edl
 html
 templates
+/configure/RELEASE.local
+/configure/CONFIG_SITE.local
