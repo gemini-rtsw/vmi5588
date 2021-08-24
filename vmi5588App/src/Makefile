@@ -21,6 +21,8 @@ DBD += pingpong.dbd
 SCRIPTS_HOST += ../vmi5588.py
 SCRIPTS_HOST += ../vmi5588.adl
 
+USR_CFLAGS += -DUSE_TYPED_RSET -DUSE_TYPED_DSET -DUSE_TYPED_DRVET
+
 include $(TOP)/configure/RULES
 
 

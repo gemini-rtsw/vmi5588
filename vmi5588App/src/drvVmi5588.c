@@ -116,12 +116,8 @@ long            vmi5588_report();
 long            vmi5588_init();
 
 /* Driver support DRVET */
-struct {
-    long            number;
-    DRVSUPFUN       report;
-    DRVSUPFUN       init;
-} drvVmi5588 = {
-    2,
+drvet drvVmi5588 = {
+    2L,
     vmi5588_report,
     vmi5588_init
 };
