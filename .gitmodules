@@ -1,0 +1,3 @@
+[submodule "gem-ci"]
+	path = gem-ci
+	url = ../../gem-ci
