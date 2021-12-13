@@ -17,3 +17,5 @@ variables:
     # to one of the repos defined by the three/four types of projects above) this
     # setting is derived from the branch name
     BASE_CONTAINER: "registry.gitlab.com/nsf-noirlab/gemini/rtsw/common/gemini-ade/stable:latest"
+    DOCKER_TLS_CERTDIR: ""
+
