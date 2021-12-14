@@ -77,7 +77,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files devel
 %defattr(-,root,root)
-   /%{_prefix}/%{name}/db
    /%{_prefix}/%{name}/dbd
    /%{_prefix}/%{name}/include
    /%{_prefix}/%{name}/configure
