@@ -11,7 +11,10 @@ vmi5588_SRCS += devBiVmi5588.c
 
 DBD += vmi5588.dbd
 DBD += vmi5588Supp.dbd
-vmi5588Supp_DBD += base.dbd
+vmi5588_DBD += base.dbd
+vmi5588_DBD += vmi5588driver.dbd
+
+vmi5588Supp_DBD += stdRecords.dbd
 vmi5588Supp_DBD += vmi5588driver.dbd
 vmi5588_DBD += $(vmi5588Supp_DBD)
 
