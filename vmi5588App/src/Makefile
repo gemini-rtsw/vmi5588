@@ -9,9 +9,11 @@ INC += vmi5588.h
 vmi5588_SRCS += drvVmi5588.c
 vmi5588_SRCS += devBiVmi5588.c
 
-DBD = vmi5588.dbd
-vmi5588_DBD += base.dbd
-vmi5588_DBD += vmi5588driver.dbd
+DBD += vmi5588.dbd
+DBD += vmi5588Supp.dbd
+vmi5588Supp_DBD += base.dbd
+vmi5588Supp_DBD += vmi5588driver.dbd
+vmi5588_DBD += $(vmi5588Supp_DBD)
 
 # optional pingpong test facility
 LIBRARY_IOC += pingpong
