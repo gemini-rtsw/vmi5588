@@ -16,4 +16,4 @@ variables:
     # For all other projects (where essentially only an RPM is build and deployed
     # to one of the repos defined by the three/four types of projects above) this
     # setting is derived from the branch name
-    BASE_CONTAINER: "registry.gitlab.com/nsf-noirlab/gemini/rtsw/epics-base/rtems/unstable/2022q4:latest"
+    BASE_CONTAINER: "registry.gitlab.com/nsf-noirlab/gemini/rtsw/epics-base/rtems/unstable/2023q1-tr1:latest"
