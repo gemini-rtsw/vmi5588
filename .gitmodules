@@ -1,4 +1,4 @@
 [submodule "gem-ci"]
 	path = gem-ci
 	url = ../../gem-ci
-	branch = unstable/2022q4
+	branch = unstable/2023q1

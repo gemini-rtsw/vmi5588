@@ -1,7 +1,7 @@
 
 include:
     project: 'nsf-noirlab/gemini/rtsw/gem-ci'
-    ref: "unstable/2022q4"
+    ref: "unstable/2023q1"
     file: 
      - '/templates/gitlab-ci/templates/global-rpm-container-docker.gitlab-ci.template.yml'
      - '/templates/gitlab-ci/templates/epics-base-rpm-container-docker.gitlab-ci.template.yml'
@@ -16,4 +16,4 @@ variables:
     # For all other projects (where essentially only an RPM is build and deployed
     # to one of the repos defined by the three/four types of projects above) this
     # setting is derived from the branch name
-    BASE_CONTAINER: "registry.gitlab.com/nsf-noirlab/gemini/rtsw/epics-base/rtems/unstable/2023q1-tr1:latest"
+    BASE_CONTAINER: "registry.gitlab.com/nsf-noirlab/gemini/rtsw/epics-base/rtems/unstable/2023q1-tr2:latest"
