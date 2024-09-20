@@ -1,7 +1,7 @@
 
 include:
     project: 'nsf-noirlab/gemini/rtsw/gem-ci'
-    ref: "unstable/2024q3"
+    ref: "master"
     file: 
      - '/templates/gitlab-ci/templates/global-rpm-container-docker.gitlab-ci.template.yml'
      - '/templates/gitlab-ci/templates/epics-support-rpm-container-docker.gitlab-ci.template.yml'
