@@ -19,12 +19,12 @@ vmi5588Supp_DBD += vmi5588driver.dbd
 vmi5588_DBD += $(vmi5588Supp_DBD)
 
 # optional pingpong test facility
-LIBRARY_IOC += pingpong
-pingpong_SRCS += pingpong.c
-DBD += pingpong.dbd
+#LIBRARY_IOC += pingpong
+#pingpong_SRCS += pingpong.c
+#DBD += pingpong.dbd
 
-SCRIPTS_HOST += ../vmi5588.py
-SCRIPTS_HOST += ../vmi5588.adl
+#SCRIPTS_HOST += ../vmi5588.py
+#SCRIPTS_HOST += ../vmi5588.adl
 
 USR_CFLAGS += -DUSE_TYPED_RSET -DUSE_TYPED_DSET -DUSE_TYPED_DRVET
 
