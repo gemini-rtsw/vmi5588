@@ -26,8 +26,8 @@ Source0: %{name}-%{version}.tar.gz
 ExclusiveArch: %{arch}
 Prefix: %{_prefix}
 ## You may specify dependencies here
-BuildRequires: epics-base-devel = 7.0.7-0.gitd18bee6.el8 re2c
-Requires: epics-base = 7.0.7-0.gitd18bee6.el8
+BuildRequires: epics-base-devel = 7.0.7-0.git.16f5056.el8 re2c
+## (runtime Requires removed: cross-compiled VME/build-only artifact, never runs on host)
 ## Switch dependency checking off
 ## AutoReqProv: no
 
