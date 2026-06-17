@@ -8,6 +8,11 @@ on:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        el: ['8', '9']
     uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@main-el8
     with:
       scripts_dir: gemini-rtsw-ci
+      el_version: ${{ matrix.el }}
