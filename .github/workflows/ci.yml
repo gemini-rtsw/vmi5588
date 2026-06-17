@@ -16,3 +16,10 @@ jobs:
     with:
       scripts_dir: gemini-rtsw-ci
       el_version: ${{ matrix.el }}
+
+  # Rebuild rpm-repo:latest ONCE, after both EL legs have pushed their scratch
+  # tags. Single writer -> no el8/el9 race on :latest. Shows as the final job.
+  publish:
+    needs: build
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main-el8
+    secrets: inherit
