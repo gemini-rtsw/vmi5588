@@ -26,7 +26,7 @@ Source0: %{name}-%{version}.tar.gz
 ExclusiveArch: %{arch}
 Prefix: %{_prefix}
 ## You may specify dependencies here
-BuildRequires: epics-base-devel = 7.0.7-0.git.1159d86%{?dist} re2c
+BuildRequires: epics-base-devel = 7.0.7-0.git.bb87399%{?dist} re2c
 ## (runtime Requires removed: cross-compiled VME/build-only artifact, never runs on host)
 ## Switch dependency checking off
 ## AutoReqProv: no
