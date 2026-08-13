@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         el: ['8', '9']
-    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@main-el8
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@main
     with:
       scripts_dir: gemini-rtsw-ci
       el_version: ${{ matrix.el }}
@@ -21,5 +21,5 @@ jobs:
   # tags. Single writer -> no el8/el9 race on :latest. Shows as the final job.
   publish:
     needs: build
-    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main-el8
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main
     secrets: inherit
